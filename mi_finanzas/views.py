@@ -1,6 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, DecimalField
+# ¡CORRECCIÓN! Se añaden F, Case, y When para el cálculo histórico
+from django.db.models import Sum, DecimalField, F, Case, When
 from django.db.models.functions import Coalesce
 from django.contrib import messages
 from django.http import JsonResponse
@@ -30,12 +31,34 @@ def resumen_financiero(request):
     # 1. CÁLCULO DE MÉTRICAS GLOBALES
     # ---------------------------------------------------------
     
-    # 1A. Saldo Inicial Total (Punto de partida)
+    # 1A. Suma del Balance Inicial de TODAS las cuentas (Saldos de partida)
     saldo_inicial_cuentas = Cuenta.objects.filter(usuario=usuario).aggregate(
         total=Coalesce(Sum('balance'), Decimal(0.00), output_field=DecimalField())
     )['total']
+
+    # 1B. Cálculo de TODAS las transacciones netas históricas (Ingreso - Gasto de SIEMPRE)
+    transacciones_historicas_netas = Transaccion.objects.filter(
+        usuario=usuario
+    ).aggregate(
+        neto=Coalesce(
+            Sum(
+                Case(
+                    When(tipo='INGRESO', then=F('monto')),
+                    When(tipo='GASTO', then=-F('monto')),
+                    default=0,
+                    output_field=DecimalField()
+                )
+            ),
+            Decimal(0.00),
+            output_field=DecimalField()
+        )
+    )['neto']
+
+    # 🎯 SALDO TOTAL NETO REAL Y HISTÓRICO: 
+    # Balance Inicial + Transacciones Históricas Netas
+    saldo_total_neto = saldo_inicial_cuentas + transacciones_historicas_netas
     
-    # 1B. Ingresos del Mes Actual
+    # 1C. Ingresos del Mes Actual (Se mantiene para el resumen mensual)
     ingresos_del_mes = Transaccion.objects.filter(
         usuario=usuario, 
         tipo='INGRESO', 
@@ -45,7 +68,7 @@ def resumen_financiero(request):
         total=Coalesce(Sum('monto'), Decimal(0.00), output_field=DecimalField())
     )['total']
     
-    # 1C. Gastos del Mes Actual
+    # 1D. Gastos del Mes Actual (Se mantiene para el resumen mensual)
     gastos_del_mes = Transaccion.objects.filter(
         usuario=usuario, 
         tipo='GASTO', 
@@ -54,10 +77,6 @@ def resumen_financiero(request):
     ).aggregate(
         total=Coalesce(Sum('monto'), Decimal(0.00), output_field=DecimalField())
     )['total']
-    
-    # 🎯 CORRECCIÓN DEL SALDO TOTAL NETO
-    # SALDO TOTAL NETO = Saldo Inicial + Ingresos del Mes - Gastos del Mes
-    saldo_total_neto = saldo_inicial_cuentas + ingresos_del_mes - gastos_del_mes
     
     # ---------------------------------------------------------
     # 2. LISTA DE CUENTAS
@@ -290,7 +309,7 @@ def transacciones_lista(request):
 def anadir_transaccion(request):
     """Añade una nueva transacción."""
     if request.method == 'POST':
-        # ✅ CORREGIDO: Se pasa request.POST como el primer argumento y request.user como palabra clave.
+        # Se pasa request.POST como el primer argumento y request.user como palabra clave.
         form = TransaccionForm(request.POST, user=request.user) 
         if form.is_valid():
             transaccion = form.save(commit=False)
@@ -299,7 +318,7 @@ def anadir_transaccion(request):
             messages.success(request, "Transacción añadida exitosamente.")
             return redirect('mi_finanzas:resumen_financiero')
     else:
-        # ✅ CORREGIDO: Se pasa request.user solo como palabra clave.
+        # Se pasa request.user solo como palabra clave.
         form = TransaccionForm(user=request.user)
         
     return render(request, 'mi_finanzas/anadir_transaccion.html', {'form': form})
@@ -363,4 +382,3 @@ class RegistroUsuarioView(CreateView):
     form_class = RegistroUsuarioForm
     template_name = 'mi_finanzas/registro.html' 
     success_url = reverse_lazy('auth:login') 
-
