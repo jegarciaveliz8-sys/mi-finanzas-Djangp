@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load widget_tweaks %}
+
+{% block title %}{{ accion }} Cuenta{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">{{ accion }} Cuenta</h2>
+
+                <form method="post">
+                    {% csrf_token %}
+
+                    {# Itera sobre los campos del formulario y aplica estilos Bootstrap #}
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            
+                            {# CRUCIAL: Aplica el filtro add_class para Bootstrap #}
+                            {{ field|add_class:"form-control" }}
+                            
+                            {# Muestra errores específicos del campo #}
+                            {% for error in field.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+
+                    <button type="submit" class="btn btn-success w-100 mt-3">Guardar Cuenta</button>
+                    <a href="{% url 'mi_finanzas:cuentas_lista' %}" class="btn btn-secondary w-100 mt-2">Cancelar</a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+

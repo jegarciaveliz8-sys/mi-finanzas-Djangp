@@ -1,0 +1,65 @@
+{% extends "base.html" %} 
+{% load static %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8 col-lg-6">
+            <h2 class="mb-4">Agregar Nueva Transacción</h2>
+            <hr>
+            
+            <form method="post">
+                {% csrf_token %}
+                
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger" role="alert">
+                        {% for error in form.non_field_errors %}{{ error }}{% endfor %}
+                    </div>
+                {% endif %}
+
+                <div class="mb-3">
+                    <label for="{{ form.cuenta.id_for_label }}" class="form-label">Cuenta:</label>
+                    {{ form.cuenta }}
+                    {% for error in form.cuenta.errors %}<small class="text-danger">{{ error }}</small>{% endfor %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="{{ form.tipo.id_for_label }}" class="form-label">Tipo:</label>
+                    {{ form.tipo }}
+                    {% for error in form.tipo.errors %}<small class="text-danger">{{ error }}</small>{% endfor %}
+                </div>
+                
+                <div class="mb-3">
+                    <label for="{{ form.cantidad.id_for_label }}" class="form-label">Cantidad:</label>
+                    {{ form.cantidad }}
+                    {% for error in form.cantidad.errors %}<small class="text-danger">{{ error }}</small>{% endfor %}
+                    <div class="form-text text-muted">Use valores negativos (ej: -50.00) para gastos.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="{{ form.fecha.id_for_label }}" class="form-label">Fecha:</label>
+                    {{ form.fecha }}
+                    {% for error in form.fecha.errors %}<small class="text-danger">{{ error }}</small>{% endfor %}
+                </div>
+                
+                <div class="mb-3">
+                    <label for="{{ form.categoria.id_for_label }}" class="form-label">Categoría:</label>
+                    {{ form.categoria }}
+                    {% for error in form.categoria.errors %}<small class="text-danger">{{ error }}</small>{% endfor %}
+                </div>
+
+                <div class="mb-3">
+                    <label for="{{ form.descripcion.id_for_label }}" class="form-label">Descripción:</label>
+                    {{ form.descripcion }}
+                    {% for error in form.descripcion.errors %}<small class="text-danger">{{ error }}</small>{% endfor %}
+                </div>
+
+                <div class="d-grid gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary btn-lg">Guardar Transacción</button>
+                    <a href="{% url 'panel_de_control' %}" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock content %}

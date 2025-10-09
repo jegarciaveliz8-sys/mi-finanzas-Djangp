@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>{% if puede_eliminar %}¿Estás seguro de que quieres eliminar la cuenta?{% else %}No puedes eliminar esta cuenta.{% endif %}</h1>
+
+    <p>Nombre de la Cuenta: {{ cuenta.nombre }}</p>
+    <p>Tipo: {{ cuenta.tipo }}</p>
+    <p>Balance actual: ${{ cuenta.balance }}</p>
+
+    {% if puede_eliminar %}
+        <form method="post" action="{% url 'mi_finanzas:eliminar_cuenta' pk=cuenta.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Confirmar Eliminación</button>
+        </form>
+    {% else %}
+        <div class="alert alert-warning" role="alert">
+            Esta cuenta no se puede eliminar porque tiene transacciones asociadas.
+        </div>
+    {% endif %}
+
+    <a href="{% url 'mi_finanzas:cuentas_lista' %}" class="btn btn-secondary">Cancelar y Volver</a>
+{% endblock content %}
+

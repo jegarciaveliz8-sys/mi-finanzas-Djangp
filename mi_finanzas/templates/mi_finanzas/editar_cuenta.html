@@ -1,0 +1,31 @@
+{% extends "base.html" %} 
+{% block title %}Editar Cuenta{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Editar Cuenta: {{ cuenta.nombre }}</h2>
+    
+    <form method="post" class="mb-4">
+        {% csrf_token %}
+        {{ form.as_p }}
+        
+        <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+        
+        <a href="{% url 'mi_finanzas:resumen_financiero' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+    
+    <hr>
+    
+    <h3 class="mt-4 text-danger">Zona de Peligro</h3>
+    
+    <form method="post" action="{% url 'mi_finanzas:eliminar_cuenta' pk=cuenta.pk %}" class="d-inline">
+        {% csrf_token %}
+        <p>Al eliminar esta cuenta, todas las transacciones asociadas podrían perderse o causar errores. ¡Proceda con cautela!</p>
+        <button type="submit" class="btn btn-danger" 
+                onclick="return confirm('ATENCIÓN: ¿Estás seguro de que deseas ELIMINAR la cuenta {{ cuenta.nombre }}? Esta acción es irreversible y podría afectar tus transacciones.')">
+            Eliminar Cuenta Permanentemente
+        </button>
+    </form>
+    
+</div>
+{% endblock content %}

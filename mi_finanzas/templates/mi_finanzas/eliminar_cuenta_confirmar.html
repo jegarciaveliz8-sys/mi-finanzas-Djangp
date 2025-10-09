@@ -1,0 +1,20 @@
+{% extends "base.html" %} 
+{% block title %}Confirmar Eliminación{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Confirmar Eliminación</h2>
+    
+    <div class="alert alert-danger" role="alert">
+        <p>Estás a punto de eliminar permanentemente la cuenta **{{ cuenta.nombre }}**.</p>
+        <p>¡Esta acción es irreversible! ¿Estás completamente seguro de que deseas eliminar esta cuenta?</p>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        
+        <button type="submit" class="btn btn-danger me-2">Sí, Eliminar Permanentemente</button>
+        <a href="{% url 'cuentas_lista' %}" class="btn btn-secondary">Cancelar</a>
+    </form>
+</div>
+{% endblock content %}

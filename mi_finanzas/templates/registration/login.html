@@ -1,0 +1,53 @@
+{% extends "mi_finanzas/base.html" %} 
+{% load static %}
+{% load widget_tweaks %} {# Necesario para el estilo 'form-control' #}
+
+{% block title %}Iniciar Sesión{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card shadow p-4">
+                <h2 class="card-title text-center mb-4">Iniciar Sesión</h2>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {# Manejo de Errores de Credenciales #}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    {# Renderizado con estilo Bootstrap #}
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            {# Usamos widget_tweaks para aplicar el estilo Bootstrap #}
+                            {{ field|add_class:"form-control" }}
+                            
+                            {% for error in field.errors %}
+                                <div class="form-text text-danger">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+
+                    <button type="submit" class="btn btn-primary w-100 mt-3">Entrar</button>
+                    
+                    {# CORRECCIÓN DE PATRÓN: Usa el namespace 'auth' #}
+                    <p class="text-end mt-2">
+                        <a href="{% url 'auth:password_reset' %}">¿Olvidaste tu contraseña?</a>
+                    </p>
+                    
+                </form>
+
+                <hr>
+                <p class="text-center">
+                    ¿No tienes cuenta? <a href="{% url 'signup' %}">Regístrate aquí</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+

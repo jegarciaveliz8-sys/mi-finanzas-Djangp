@@ -1,0 +1,34 @@
+{% extends "base.html" %} 
+{% block title %}Lista de Cuentas{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Tus Cuentas</h2>
+        <a href="{% url 'mi_finanzas:anadir_cuenta' %}" class="btn btn-primary">
+            + Agregar Cuenta
+        </a>
+    </div>
+
+    {% if cuentas %}
+        <ul class="list-group">
+            {% for cuenta in cuentas %}
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>{{ cuenta.nombre }}</strong>
+                        <small class="text-muted"> ({{ cuenta.tipo }})</small>
+                    </div>
+                    <a href="{% url 'mi_finanzas:editar_cuenta' pk=cuenta.pk %}" class="btn btn-sm btn-outline-secondary">
+                        Editar
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <div class="alert alert-info">
+            No tienes cuentas registradas. ¡Agrega la primera!
+        </div>
+    {% endif %}
+</div>
+{% endblock content %}
+

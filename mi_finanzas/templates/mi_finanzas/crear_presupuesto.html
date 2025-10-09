@@ -1,0 +1,37 @@
+{% extends "mi_finanzas/base.html" %} 
+{# La carga de crispy_forms_tags está COMENTADA para evitar el error TemplateDoesNotExist #}
+{# {% load crispy_forms_tags %} #}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card mt-4">
+            <div class="card-header bg-success text-white">
+                <h2>Crear Nuevo Presupuesto Mensual</h2>
+            </div>
+            <div class="card-body">
+                
+                <form method="post" action="{% url 'mi_finanzas:crear_presupuesto' %}">
+                    {% csrf_token %}
+                    
+                    {# Renderizado simple de Django, sin estilos fancy #}
+                    {{ form.as_p }} 
+
+                    <p class="text-muted small mt-3">
+                        **Nota:** El sistema asignará automáticamente este presupuesto a tu usuario.
+                    </p>
+                    
+                    <button type="submit" class="btn btn-success btn-block mt-3">
+                        Guardar Presupuesto
+                    </button>
+                    
+                    <a href="{% url 'mi_finanzas:resumen_financiero' %}" class="btn btn-secondary mt-3">
+                        Cancelar
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+

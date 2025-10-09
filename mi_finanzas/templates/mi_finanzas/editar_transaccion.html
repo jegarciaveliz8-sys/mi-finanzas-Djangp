@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Editar Transacción{% endblock %}
+
+{% block content %}
+<div class="container my-5">
+    <h1 class="mb-4">Editar Transacción</h1>
+
+    <div class="card p-4 shadow-sm">
+        <form method="post">
+            {% csrf_token %}
+            
+            {{ form.as_p }}
+            
+            <button type="submit" class="btn btn-primary mt-3">Guardar Cambios</button>
+            <a href="{% url 'mi_finanzas:transacciones_lista' %}" class="btn btn-secondary mt-3">Cancelar</a>
+        </form>
+    </div>
+</div>
+{% endblock content %}
+

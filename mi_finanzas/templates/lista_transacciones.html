@@ -1,0 +1,38 @@
+{% extends "mi_finanzas/base.html" %} 
+{% block title %}Lista de Transacciones{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Historial de Transacciones</h2>
+    
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Descripción</th>
+                <th>Cantidad</th>
+                <th>Tipo</th>
+                <th>Cuenta</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for t in transacciones %}
+            <tr>
+                <td>{{ t.fecha }}</td>
+                <td>{{ t.descripcion }}</td>
+                <td>{{ t.cantidad }}</td>
+                <td>{{ t.get_tipo_display }}</td>
+                <td>{{ t.cuenta.nombre }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    
+    {% if not transacciones %}
+        <p class="mt-4 alert alert-info">Aún no tienes transacciones registradas.</p>
+    {% endif %}
+
+    <a href="{% url 'mi_finanzas:anadir_transaccion' %}" class="btn btn-primary">Agregar Nueva</a>
+</div>
+{% endblock content %}
+

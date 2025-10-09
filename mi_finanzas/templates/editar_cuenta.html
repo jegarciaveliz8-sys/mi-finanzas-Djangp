@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Editar Cuenta</title>
+</head>
+<body>
+    <h1>Editar Cuenta</h1>
+    
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Guardar Cambios</button>
+    </form>
+    
+    <a href="{% url 'cuentas_lista' %}">Cancelar y volver a Mis Cuentas</a>
+</body>
+</html>
+

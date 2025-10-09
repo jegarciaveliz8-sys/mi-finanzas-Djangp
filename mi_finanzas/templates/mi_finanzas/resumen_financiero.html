@@ -1,0 +1,293 @@
+{% extends 'base.html' %} 
+{% load humanize %} 
+
+{% block title %}Resumen Financiero{% endblock title %}
+
+{% block content %}
+
+<h1 class="mb-4">Bienvenido a tu Panel de Control</h1>
+
+{# ------------------------------------------ #}
+{# 1. MENSAJE DE ESTADO FINANCIERO DINÁMICO #}
+{# ------------------------------------------ #}
+<div class="alert {{ estado_financiero.tipo }} d-flex align-items-center" role="alert">
+    <i class="fas {{ estado_financiero.icono }} fa-2x me-3"></i>
+    <div class="ms-3">
+        <strong>Estado Financiero General:</strong> {{ estado_financiero.mensaje }}
+    </div>
+</div>
+
+<hr>
+
+{# ------------------------------------------ #}
+{# 2. MÉTRICAS CLAVE #}
+{# ------------------------------------------ #}
+<div class="row mb-5">
+    <div class="col-md-4">
+        <div class="card shadow-sm border-primary">
+            <div class="card-body">
+                <h5 class="card-title text-muted">SALDO TOTAL NETO</h5>
+                <p class="h3 mb-0 text-primary">$ {{ saldo_total_neto|floatformat:2|intcomma }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-success">
+            <div class="card-body">
+                <h5 class="card-title text-muted">INGRESOS DEL MES</h5>
+                <p class="h3 mb-0 text-success">$ {{ ingresos_del_mes|floatformat:2|intcomma }}</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card shadow-sm border-danger">
+            <div class="card-body">
+                <h5 class="card-title text-muted">GASTOS DEL MES ({{ mes_actual }} {{ anio_actual }})</h5>
+                <p class="h3 mb-0 text-danger">-$ {{ gastos_del_mes|floatformat:2|intcomma }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr>
+
+{# ------------------------------------------ #}
+{# 3. CUENTAS Y GRÁFICO #}
+{# ------------------------------------------ #}
+<div class="row">
+    
+    <div class="col-lg-6 mb-4">
+        <h2>Tus Cuentas</h2>
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover">
+                        <thead>
+                            <tr>
+                                <th>Nombre</th>
+                                <th>Tipo</th>
+                                <th class="text-right">Balance</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for cuenta in cuentas %}
+                            <tr>
+                                <td>{{ cuenta.nombre }}</td>
+                                <td>{{ cuenta.get_tipo_display }}</td>
+                                <td class="text-right">$ {{ cuenta.balance|floatformat:2|intcomma }}</td>
+                                <td>
+                                    <a href="{% url 'mi_finanzas:editar_cuenta' cuenta.pk %}" class="btn btn-sm btn-outline-info">Editar</a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center text-muted">No tienes cuentas registradas. <a href="{% url 'mi_finanzas:anadir_cuenta' %}">¡Agrega una aquí!</a></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center">
+                    <a href="{% url 'mi_finanzas:anadir_cuenta' %}" class="btn btn-sm btn-outline-success">Añadir Cuenta</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <h2>Gastos por Categoría (Mes Actual)</h2>
+        <div class="card shadow-sm">
+            <div class="card-body">
+                {% if gastos_del_mes > 0 %}
+                    <div class="mb-4" style="height: 300px;">
+                        <canvas id="gastosChart"></canvas>
+                    </div>
+
+                    <h5 class="mt-4">Desglose de Gastos</h5>
+                    <ul class="list-group list-group-flush">
+                        {% for gasto in gastos_por_categoria %}
+                            <li class="list-group-item d-flex justify-content-between align-items-center">
+                                {{ gasto.categoria__nombre }}
+                                <span class="font-weight-bold text-danger">
+                                    ${{ gasto.total|floatformat:2|intcomma }} {# ¡CORREGIDO! Eliminamos el guion manual que estaba aquí #}
+                                </span>
+                            </li>
+                        {% endfor %}
+                    </ul>
+                {% else %}
+                    <p class="text-muted text-center py-5">No hay gastos registrados este mes para graficar.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<hr>
+
+{# ------------------------------------------ #}
+{# 4. PRESUPUESTOS #}
+{# ------------------------------------------ #}
+<h2 class="mt-5">📊 Presupuestos del Mes</h2>
+<div class="row">
+    {% if resultados_presupuesto %}
+        {% for resultado in resultados_presupuesto %}
+            <div class="col-md-6 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">{{ resultado.categoria_nombre }}</h5>
+                        <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="btn btn-sm btn-outline-secondary">Editar</a>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text small text-muted">
+                            Límite: <strong>${{ resultado.limite|floatformat:2|intcomma }}</strong> | 
+                            Gastado: <strong>${{ resultado.gastado|floatformat:2|intcomma }}</strong>
+                        </p>
+                        
+                        <div class="progress mb-2" style="height: 20px;">
+                            <div class="progress-bar {{ resultado.color_barra }}" role="progressbar" 
+                                style="width: {{ resultado.porcentaje|floatformat:0 }}%" 
+                                aria-valuenow="{{ resultado.porcentaje|floatformat:0 }}" aria-valuemin="0" aria-valuemax="100">
+                                {{ resultado.porcentaje|floatformat:1 }}%
+                            </div>
+                        </div>
+
+                        {% with restante=resultado.restante|floatformat:2 %}
+                            {% if resultado.restante >= 0 %}
+                                <p class="text-success small">Te quedan <strong>${{ restante|intcomma }}</strong></p>
+                            {% else %}
+                                <p class="text-danger small">¡Te excediste por <strong>${{ restante|slice:"1:"|intcomma }}</strong>!</p>
+                            {% endif %}
+                        {% endwith %}
+                    </div>
+                </div>
+            </div>
+        {% endfor %}
+        <div class="col-md-12 text-center mt-3">
+            <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="btn btn-primary">Añadir/Editar Presupuesto</a>
+        </div>
+    {% else %}
+        <div class="col-12">
+            <div class="alert alert-info text-center">
+                Aún no has configurado presupuestos para el mes actual. <a href="{% url 'mi_finanzas:crear_presupuesto' %}">Crea uno ahora.</a>
+            </div>
+        </div>
+    {% endif %}
+</div>
+
+<hr>
+
+{# ------------------------------------------ #}
+{# 5. ACTIVIDAD RECIENTE #}
+{# ------------------------------------------ #}
+<div class="row mt-5">
+    <div class="col-lg-12 mb-4">
+        <h2 class="mt-4">Actividad Reciente</h2>
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Fecha</th>
+                                <th>Descripción</th>
+                                <th>Cuenta</th>
+                                <th>Categoría</th>
+                                <th class="text-right">Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for transaccion in ultimas_transacciones %}
+                            <tr>
+                                <td>{{ transaccion.fecha|date:"d M, Y" }}</td>
+                                <td>{{ transaccion.descripcion }}</td>
+                                <td>{{ transaccion.cuenta.nombre }}</td>
+                                <td>{{ transaccion.categoria.nombre|default:"N/A" }}</td>
+                                <td class="text-right 
+                                    {% if transaccion.tipo == 'INGRESO' %}text-success
+                                    {% else %}text-danger{% endif %}">
+                                    ${{ transaccion.monto|floatformat:2|intcomma }} {# ¡CORREGIDO! Ya no agregamos el guion aquí #}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="text-center text-muted">Aún no hay transacciones recientes.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-center pt-2">
+                    {# Asumiendo que 'transacciones_lista' será una URL futura #}
+                    <a href="#" class="btn btn-sm btn-outline-secondary">Ver todo el historial</a> 
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock content %} 
+
+{# ------------------------------------------ #}
+{# 6. JAVASCRIPT Y CHART.JS #}
+{# ------------------------------------------ #}
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+<script>
+    // Se ejecuta solo si el Canvas existe en el DOM
+    const ctx = document.getElementById('gastosChart');
+
+    if (ctx) {
+        
+        // 1. Parsear los datos de Django a un objeto JavaScript
+        // Utilizamos |safe para evitar el escape de caracteres en el JSON
+        const chartDataObject = JSON.parse('{{ chart_data | safe }}'); 
+        
+        const labels = chartDataObject.labels;
+        const data = chartDataObject.data;
+
+        // Función para generar colores de forma dinámica
+        function generateColors(count) {
+            const colors = [];
+            for (let i = 0; i < count; i++) {
+                // Genera colores distintos (usando el círculo cromático)
+                const hue = (i * 137.508) % 360; 
+                colors.push(`hsl(${hue}, 70%, 50%)`);
+            }
+            return colors;
+        }
+        
+        const backgroundColors = generateColors(labels.length);
+
+        // 2. Inicialización del Gráfico
+        if (labels.length > 0) {
+            new Chart(ctx.getContext('2d'), {
+                type: 'pie', 
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Monto de Gasto',
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, 
+                    plugins: {
+                        legend: {
+                            position: 'right', 
+                        },
+                        title: {
+                            display: false,
+                        }
+                    }
+                }
+            });
+        }
+    }
+</script>
+{% endblock extra_js %}
+

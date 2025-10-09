@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lista de Transacciones</title>
+</head>
+<body>
+    <h1>Tus Transacciones</h1>
+
+    <a href="/agregar-transaccion/">+ Agregar Nueva Transacción</a>
+    
+    <hr>
+    
+    <table border="1" cellpadding="10" cellspacing="0">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Cuenta</th>
+                <th>Descripción</th>
+                <th>Tipo</th>
+                <th>Cantidad</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for transaccion in transacciones %}
+            <tr>
+                <td>{{ transaccion.fecha|date:"Y-m-d" }}</td>
+                <td>{{ transaccion.cuenta.nombre }}</td>
+                <td>{{ transaccion.descripcion }}</td>
+                <td>{{ transaccion.tipo }}</td>
+                <td>$ {{ transaccion.cantidad|floatformat:2 }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5">No hay transacciones registradas.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</body>
+</html>
+
+

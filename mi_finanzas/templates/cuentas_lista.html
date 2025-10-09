@@ -1,0 +1,27 @@
+<h2>Agregar Nueva Cuenta</h2>
+    <form method="post">
+        {% csrf_token %}
+        {{ form.as_p }}
+        <button type="submit">Guardar</button>
+    </form>
+
+    <hr>
+
+    <h2>Tus Cuentas Existentes</h2>
+    {% if cuentas %}
+    <ul>
+        {% for cuenta in cuentas %}
+            <li>
+                {{ cuenta.nombre }}
+                - Saldo Inicial: $ {{ cuenta.saldo_inicial|floatformat:2 }}
+                - **Balance Actual**: $ {{ cuenta.balance_actual|floatformat:2 }}
+                <a href="{% url 'editar_cuenta' cuenta.pk %}">Editar</a>
+                <a href="{% url 'eliminar_cuenta' cuenta.pk %}">Eliminar</a>
+            </li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p>No tienes cuentas registradas.</p>
+    {% endif %}
+</body>
+</html>

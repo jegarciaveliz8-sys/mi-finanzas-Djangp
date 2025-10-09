@@ -1,0 +1,21 @@
+from django import forms
+# ¡CRÍTICO! Necesitas importar el modelo Transaccion
+from .models import Transaccion 
+
+class TransaccionForm(forms.ModelForm):
+    class Meta:
+        model = Transaccion
+        
+        # Lista explícita de campos a incluir
+        fields = ['cuenta', 'tipo', 'cantidad', 'fecha', 'categoria', 'descripcion']
+        
+        # Widgets para mejor presentación y funcionalidad (incluyendo la fecha)
+        widgets = {
+            'fecha': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'cuenta': forms.Select(attrs={'class': 'form-select'}),
+            'tipo': forms.Select(attrs={'class': 'form-select'}),
+            'cantidad': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Ej: -50.00 para gastos'}),
+            'categoria': forms.Select(attrs={'class': 'form-select'}),
+            'descripcion': forms.TextInput(attrs={'class': 'form-control'}),
+        }
+

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% load static %}
+{% load widget_tweaks %}
+
+{% block title %}Iniciar Sesión{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div class="card-body">
+                <h2 class="card-title text-center mb-4">Iniciar Sesión</h2>
+                
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    {# 1. Manejo de Errores de Credenciales (non_field_errors) #}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger" role="alert">
+                            {% for error in form.non_field_errors %}
+                                {{ error }}
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                    
+                    {# 2. Iteración y Renderizado de Campos con Bootstrap #}
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
+                            
+                            {# Aquí es donde se usa el filtro 'add_class' #}
+                            {{ field|add_class:"form-control" }}
+                            
+                            {% for error in field.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+                    
+                    {# 3. Enlace de "Olvidaste tu contraseña" - AQUÍ ESTABA LA CORRECCIÓN #}
+                    {# Si el enlace problemático está en base.html, DEBEMOS AÑADIRLO AQUÍ CORREGIDO #}
+                    <p class="text-end">
+                        <a href="{% url 'auth:password_reset' %}">¿Olvidaste tu contraseña?</a> 
+                    </p>
+                    {# FIN DE LA CORRECCIÓN #}
+
+                    <input type="hidden" name="next" value="{{ next|default:'/' }}" />
+                    <button type="submit" class="btn btn-primary w-100 mt-3">Entrar</button>
+                </form>
+
+                <hr>
+                <p class="text-center">
+                    {# CORRECCIÓN DE REGISTRO: Asumimos que el patrón en urls.py es 'signup' #}
+                    ¿No tienes cuenta? <a href="{% url 'signup' %}">Regístrate aquí</a>
+                </p>
+                
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Entorno Virtual
+venv/
+.venv/
+env/
+
+# Django
+*.log
+*.sqlite3 
+local_settings.py
+static/ # Si estás manejando archivos estáticos de forma local en desarrollo
+media/
+
+# Dependencias
+Pipfile.lock
