@@ -15,7 +15,13 @@ from django.views.decorators.http import require_POST
 from django.urls import reverse_lazy 
 from django.views.generic import CreateView 
 from django.contrib.auth.models import User 
-
+from django.db import transaction # ¡AÑADIR ESTO!
+# ... (otras importaciones)
+from .forms import (
+    CuentaForm, TransaccionForm, PresupuestoForm, RegistroUsuarioForm,
+    TransferenciaForm # <--- ¡AÑADIR ESTO!
+) 
+# ... (resto de importaciones)
 # =========================================================
 # 1. VISTA DEL PANEL DE CONTROL (RESUMEN FINANCIERO)
 # =========================================================
