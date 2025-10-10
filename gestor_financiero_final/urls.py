@@ -1,8 +1,10 @@
 from django.contrib import admin
 from django.urls import path, include
 from django.contrib.auth import urls as auth_urls 
-# Asegúrate de que esta línea es correcta para tu proyecto
-from mi_finanzas.views import RegistroUsuarioView 
+
+# 🛑 CORRECCIÓN CRÍTICA: Importamos 'RegistroUsuario', NO 'RegistroUsuarioView'.
+# Este cambio resuelve el 'ImportError: cannot import name 'RegistroUsuarioView''
+from mi_finanzas.views import RegistroUsuario 
 
 urlpatterns = [
     # Ruta de Administración
@@ -13,8 +15,8 @@ urlpatterns = [
     path('accounts/', include((auth_urls, 'auth'), namespace='auth')), 
 
     # 2. Rutas de Registro (CRÍTICO: Define el patrón 'signup')
-    # Esta línea resuelve el error NoReverseMatch que viste.
-    path('accounts/signup/', RegistroUsuarioView.as_view(), name='signup'), 
+    # Usamos la clase corregida: RegistroUsuario.as_view()
+    path('accounts/signup/', RegistroUsuario.as_view(), name='signup'), 
 
     # 3. Rutas de tu Aplicación 'mi_finanzas'
     path('', include(('mi_finanzas.urls', 'mi_finanzas'), namespace='mi_finanzas')),
