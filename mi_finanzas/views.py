@@ -24,6 +24,14 @@ from .forms import (
     RegistroUsuario
 )
 
+class RegistroUsuario(CreateView):
+    """
+    Vista basada en clase para el registro de nuevos usuarios.
+    """
+    model = User
+    form_class = RegistroUsuarioForm
+    template_name = 'mi_finanzas/registro.html'
+    success_url = reverse_lazy('mi_finanzas:resumen_financiero') 
 
 # =========================================================
 # 1. VISTA DE RESUMEN (PANEL DE CONTROL)
