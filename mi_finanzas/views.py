@@ -311,3 +311,30 @@ def anadir_cuenta(request):
         'titulo': 'Añadir Nueva Cuenta'
     }
     return render(request, 'mi_finanzas/anadir_cuenta.html', context)
+
+
+@login_required
+def editar_cuenta(request, pk):
+    """
+    Vista para editar una cuenta existente.
+    """
+    # 1. Obtener la cuenta, asegurando que pertenezca al usuario actual (seguridad)
+    cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
+    
+    if request.method == 'POST':
+        # Instanciar el formulario con los datos POST y la instancia de la cuenta
+        form = CuentaForm(request.POST, instance=cuenta) 
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Cuenta '{cuenta.nombre}' actualizada exitosamente.")
+            # Redirigir a la lista de cuentas
+            return redirect('mi_finanzas:cuentas_lista') 
+    else:
+        # Instanciar el formulario con los datos actuales de la cuenta
+        form = CuentaForm(instance=cuenta)
+        
+    context = {
+        'form': form,
+        'titulo': f'Editar Cuenta: {cuenta.nombre}'
+    }
+    return render(request, 'mi_finanzas/editar_cuenta.html', context)
