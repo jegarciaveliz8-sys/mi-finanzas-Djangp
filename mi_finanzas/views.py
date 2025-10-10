@@ -442,3 +442,29 @@ def crear_presupuesto(request):
     }
     return render(request, 'mi_finanzas/crear_presupuesto.html', context)
 
+
+
+@login_required
+def reportes_financieros(request):
+    """
+    Vista para generar y mostrar reportes detallados y gráficos.
+    """
+    usuario = request.user
+    
+    # Lógica de ejemplo: Puedes agregar aquí filtros por fecha, 
+    # categorías o cuentas para generar reportes dinámicos.
+    
+    # 1. Datos para el reporte de gastos por categoría (histórico o por filtro)
+    gastos_totales_por_categoria = Transaccion.objects.filter(
+        usuario=usuario,
+        tipo='GASTO'
+    ).values('categoria__nombre').annotate(
+        total=Sum('monto')
+    ).order_by('-total')
+
+    context = {
+        'titulo': 'Reportes y Análisis',
+        'gastos_por_categoria': gastos_totales_por_categoria,
+        # Puedes añadir otros datos de reportes aquí
+    }
+    return render(request, 'mi_finanzas/reportes_financieros.html', context)
