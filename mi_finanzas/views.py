@@ -341,3 +341,22 @@ def editar_cuenta(request, pk):
 
 
 
+@login_required
+@require_POST  # Solo permite solicitudes POST para mayor seguridad
+def eliminar_cuenta(request, pk):
+    """
+    Vista para eliminar una cuenta existente.
+    """
+    # 1. Obtener la cuenta y asegurar la propiedad
+    cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
+    
+    # 2. Prevenir la eliminación si tiene transacciones
+    if Transaccion.objects.filter(cuenta=cuenta).exists():
+        messages.error(request, f"No se puede eliminar la cuenta '{cuenta.nombre}' porque tiene transacciones asociadas. Elimina las transacciones primero.")
+        return redirect('mi_finanzas:cuentas_lista')
+
+    # 3. Eliminar la cuenta
+    cuenta.delete()
+    messages.success(request, f"Cuenta '{cuenta.nombre}' eliminada exitosamente.")
+    return redirect('mi_finanzas:cuentas_lista')
+
