@@ -286,3 +286,28 @@ def transacciones_lista(request):
         'titulo': 'Lista de Transacciones'
     }
     return render(request, 'mi_finanzas/transacciones_lista.html', context)
+
+
+@login_required
+def anadir_cuenta(request):
+    """
+    Vista para añadir una nueva cuenta financiera.
+    """
+    if request.method == 'POST':
+        # Nota: Asumiendo que CuentaForm fue importado correctamente
+        form = CuentaForm(request.POST) 
+        if form.is_valid():
+            cuenta = form.save(commit=False)
+            cuenta.usuario = request.user
+            cuenta.save()
+            messages.success(request, "Cuenta añadida exitosamente.")
+            # Redirección a la lista de cuentas
+            return redirect('mi_finanzas:cuentas_lista') 
+    else:
+        form = CuentaForm()
+        
+    context = {
+        'form': form,
+        'titulo': 'Añadir Nueva Cuenta'
+    }
+    return render(request, 'mi_finanzas/anadir_cuenta.html', context)
