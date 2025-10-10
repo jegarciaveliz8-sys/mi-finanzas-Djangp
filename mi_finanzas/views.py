@@ -21,7 +21,7 @@ from .forms import (
     TransferenciaForm, # <-- ¡CRÍTICO! Soluciona NameError
     CuentaForm, # Asumiendo que existe
     PresupuestoForm # Asumiendo que existe
-    RegistroUsuario
+    
 )
 
 class RegistroUsuario(CreateView):
@@ -32,6 +32,7 @@ class RegistroUsuario(CreateView):
     form_class = RegistroUsuarioForm
     template_name = 'mi_finanzas/registro.html'
     success_url = reverse_lazy('mi_finanzas:resumen_financiero') 
+
 
 # =========================================================
 # 1. VISTA DE RESUMEN (PANEL DE CONTROL)
