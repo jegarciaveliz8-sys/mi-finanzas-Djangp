@@ -338,3 +338,6 @@ def editar_cuenta(request, pk):
         'titulo': f'Editar Cuenta: {cuenta.nombre}'
     }
     return render(request, 'mi_finanzas/editar_cuenta.html', context)
+
+
+
