@@ -417,3 +417,28 @@ def editar_transaccion(request, pk):
     }
     return render(request, 'mi_finanzas/editar_transaccion.html', context)
 
+
+@login_required
+def crear_presupuesto(request):
+    """
+    Vista para crear un nuevo presupuesto mensual.
+    """
+    if request.method == 'POST':
+        # Nota: Asumiendo que PresupuestoForm fue importado correctamente
+        form = PresupuestoForm(request.POST, user=request.user)
+        if form.is_valid():
+            presupuesto = form.save(commit=False)
+            presupuesto.usuario = request.user
+            presupuesto.save()
+            messages.success(request, "¡Presupuesto creado exitosamente!")
+            # Redirigir al resumen o a una lista de presupuestos si existe
+            return redirect('mi_finanzas:resumen_financiero') 
+    else:
+        form = PresupuestoForm(user=request.user)
+        
+    context = {
+        'form': form,
+        'titulo': 'Crear Nuevo Presupuesto'
+    }
+    return render(request, 'mi_finanzas/crear_presupuesto.html', context)
+
