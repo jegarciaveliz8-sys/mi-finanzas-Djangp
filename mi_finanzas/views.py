@@ -21,6 +21,7 @@ from .forms import (
     TransferenciaForm, # <-- ¡CRÍTICO! Soluciona NameError
     CuentaForm, # Asumiendo que existe
     PresupuestoForm # Asumiendo que existe
+    RegistroUsuario
 )
 
 
