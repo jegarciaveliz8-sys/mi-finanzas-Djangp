@@ -273,3 +273,16 @@ def cuentas_lista(request):
 # ... (Asegúrate de que tus otras vistas como anadir_cuenta, editar_cuenta, 
 # transacciones_lista, reportes_financieros, etc., estén implementadas después de aquí) ...
 
+@login_required
+def transacciones_lista(request):
+    """
+    Muestra una lista de todas las transacciones del usuario.
+    """
+    # Filtra solo las transacciones del usuario y ordena por fecha descendente
+    transacciones = Transaccion.objects.filter(usuario=request.user).order_by('-fecha')
+    
+    context = {
+        'transacciones': transacciones,
+        'titulo': 'Lista de Transacciones'
+    }
+    return render(request, 'mi_finanzas/transacciones_lista.html', context)
