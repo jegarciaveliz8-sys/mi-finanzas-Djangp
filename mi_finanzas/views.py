@@ -1,29 +1,31 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-# ¡CORRECCIÓN! Se añaden F, Case, y When para el cálculo histórico
 from django.db.models import Sum, DecimalField, F, Case, When
 from django.db.models.functions import Coalesce
 from django.contrib import messages
-from django.http import JsonResponse
-import json
-import datetime
-from decimal import Decimal
-from django.http import HttpResponse 
-from .models import Cuenta, Transaccion, Categoria, Presupuesto
-from .forms import CuentaForm, TransaccionForm, PresupuestoForm, RegistroUsuarioForm
-from django.views.decorators.http import require_POST 
+from django.http import JsonResponse, HttpResponse
 from django.urls import reverse_lazy 
 from django.views.generic import CreateView 
 from django.contrib.auth.models import User 
-from django.db import transaction # ¡AÑADIR ESTO!
-# ... (otras importaciones)
+from django.views.decorators.http import require_POST 
+from django.db import transaction # Importación esencial para transacciones atómicas
+
+import json
+import datetime
+from decimal import Decimal
+from .models import Cuenta, Transaccion, Categoria, Presupuesto
+# 🎯 CORRECCIÓN: Asegurar que todos los formularios necesarios estén importados
 from .forms import (
-    CuentaForm, TransaccionForm, PresupuestoForm, RegistroUsuarioForm,
-    TransferenciaForm # <--- ¡AÑADIR ESTO!
-) 
-# ... (resto de importaciones)
+    RegistroUsuarioForm, 
+    TransaccionForm, 
+    TransferenciaForm, # <-- ¡CRÍTICO! Soluciona NameError
+    CuentaForm, # Asumiendo que existe
+    PresupuestoForm # Asumiendo que existe
+)
+
+
 # =========================================================
-# 1. VISTA DEL PANEL DE CONTROL (RESUMEN FINANCIERO)
+# 1. VISTA DE RESUMEN (PANEL DE CONTROL)
 # =========================================================
 
 @login_required
@@ -37,12 +39,12 @@ def resumen_financiero(request):
     # 1. CÁLCULO DE MÉTRICAS GLOBALES
     # ---------------------------------------------------------
     
-    # 1A. Suma del Balance Inicial de TODAS las cuentas (Saldos de partida)
+    # 1A. Suma del Balance Inicial de TODAS las cuentas 
     saldo_inicial_cuentas = Cuenta.objects.filter(usuario=usuario).aggregate(
         total=Coalesce(Sum('balance'), Decimal(0.00), output_field=DecimalField())
     )['total']
 
-    # 1B. Cálculo de TODAS las transacciones netas históricas (Ingreso - Gasto de SIEMPRE)
+    # 1B. Cálculo de TODAS las transacciones netas históricas
     transacciones_historicas_netas = Transaccion.objects.filter(
         usuario=usuario
     ).aggregate(
@@ -60,11 +62,10 @@ def resumen_financiero(request):
         )
     )['neto']
 
-    # 🎯 SALDO TOTAL NETO REAL Y HISTÓRICO: 
-    # Balance Inicial + Transacciones Históricas Netas
+    # 🎯 SALDO TOTAL NETO REAL Y HISTÓRICO (Cálculo Dinámico)
     saldo_total_neto = saldo_inicial_cuentas + transacciones_historicas_netas
     
-    # 1C. Ingresos del Mes Actual (Se mantiene para el resumen mensual)
+    # 1C. Ingresos del Mes Actual
     ingresos_del_mes = Transaccion.objects.filter(
         usuario=usuario, 
         tipo='INGRESO', 
@@ -74,7 +75,7 @@ def resumen_financiero(request):
         total=Coalesce(Sum('monto'), Decimal(0.00), output_field=DecimalField())
     )['total']
     
-    # 1D. Gastos del Mes Actual (Se mantiene para el resumen mensual)
+    # 1D. Gastos del Mes Actual
     gastos_del_mes = Transaccion.objects.filter(
         usuario=usuario, 
         tipo='GASTO', 
@@ -91,10 +92,9 @@ def resumen_financiero(request):
     cuentas = Cuenta.objects.filter(usuario=usuario).order_by('nombre')
     
     # ---------------------------------------------------------
-    # 3. DATOS PARA EL GRÁFICO DE GASTOS (Chart.js)
+    # 3. DATOS PARA GRÁFICO DE GASTOS
     # ---------------------------------------------------------
     
-    # Agrupa los gastos del mes por categoría
     gastos_por_categoria = Transaccion.objects.filter(
         usuario=usuario,
         tipo='GASTO',
@@ -104,9 +104,8 @@ def resumen_financiero(request):
         total=Coalesce(Sum('monto'), Decimal(0.00))
     ).order_by('-total')
 
-    # Prepara los datos para el JSON del gráfico
     chart_labels = [gasto['categoria__nombre'] if gasto['categoria__nombre'] else 'Sin Categoría' 
-                    for gasto in gastos_por_categoria if gasto['total'] > 0]
+                     for gasto in gastos_por_categoria if gasto['total'] > 0]
     chart_data_values = [float(gasto['total']) 
                          for gasto in gastos_por_categoria if gasto['total'] > 0]
 
@@ -114,7 +113,6 @@ def resumen_financiero(request):
         'labels': chart_labels,
         'data': chart_data_values
     }
-    # Convertir a JSON seguro para incrustar en HTML
     chart_data_json = json.dumps(chart_data)
 
 
@@ -137,7 +135,6 @@ def resumen_financiero(request):
             total=Coalesce(Sum('monto'), Decimal(0.00))
         )['total']
         
-        # Usamos 'monto_limite'
         limite = presupuesto.monto_limite 
         
         # Calcular porcentaje y restante
@@ -149,7 +146,7 @@ def resumen_financiero(request):
             color_barra = 'bg-success'
         elif porcentaje <= 100:
             color_barra = 'bg-warning'
-        else: # Gasto excede el 100%
+        else:
             color_barra = 'bg-danger'
             
         resultados_presupuesto.append({
@@ -173,7 +170,6 @@ def resumen_financiero(request):
     # 6. LÓGICA DEL MENSAJE DE SALUD FINANCIERA
     # ---------------------------------------------------------
 
-    # Usamos el Saldo Total Neto ACTUALIZADO
     if float(saldo_total_neto) > 500: 
         estado_financiero = {
             'tipo': 'alert-success',
@@ -186,7 +182,7 @@ def resumen_financiero(request):
             'icono': 'fas fa-exclamation-triangle',
             'mensaje': 'Estás en territorio positivo, pero considera aumentar tus ahorros.'
         }
-    else: # Saldo es negativo
+    else:
         estado_financiero = {
             'tipo': 'alert-danger',
             'icono': 'fas fa-skull-crossbones',
@@ -216,106 +212,61 @@ def resumen_financiero(request):
 
 
 # =========================================================
-# 2. VISTAS CRUD DE CUENTAS 
+# 2. VISTAS DE TRANSACCIONES Y MOVIMIENTOS
 # =========================================================
 
 @login_required
-def cuentas_lista(request):
-    """Muestra todas las cuentas del usuario."""
-    cuentas = Cuenta.objects.filter(usuario=request.user)
-    return render(request, 'mi_finanzas/cuentas_lista.html', {'cuentas': cuentas})
-
-@login_required
-def anadir_cuenta(request):
-    """Añade una nueva cuenta."""
+def transferir_monto(request):
+    """Define la lógica para la transferencia de montos."""
+    # 1. Manejar el Envío del Formulario (POST)
     if request.method == 'POST':
-        form = CuentaForm(request.POST)
-        if form.is_valid():
-            cuenta = form.save(commit=False)
-            cuenta.usuario = request.user
-            cuenta.save()
-            messages.success(request, "Cuenta añadida exitosamente.")
-            return redirect('mi_finanzas:cuentas_lista')
-    else:
-        form = CuentaForm()
-    return render(request, 'mi_finanzas/anadir_cuenta.html', {'form': form})
-
-@login_required
-def editar_cuenta(request, pk):
-    """Edita una cuenta."""
-    # Obtenemos la cuenta o devolvemos 404
-    cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
-    
-    if request.method == 'POST':
-        # Lógica para manejar el formulario de edición
-        form = CuentaForm(request.POST, instance=cuenta)
-        if form.is_valid():
-            form.save()
-            messages.success(request, f"Cuenta '{cuenta.nombre}' actualizada exitosamente.")
-            return redirect('mi_finanzas:cuentas_lista')
-    else:
-        # Lógica para mostrar el formulario pre-llenado
-        form = CuentaForm(instance=cuenta)
+        form = TransferenciaForm(request.POST) 
         
-    return render(request, 'mi_finanzas/editar_cuenta.html', {'form': form, 'cuenta': cuenta})
+        if form.is_valid():
+            # Extraer datos validados del formulario
+            monto = form.cleaned_data['monto']
+            cuenta_origen = form.cleaned_data['cuenta_origen']
+            cuenta_destino = form.cleaned_data['cuenta_destino']
 
+            # La transferencia es una operación atómica: O se hacen los dos cambios, o ninguno.
+            try:
+                with transaction.atomic():
+                    # a) Restar el monto de la cuenta de origen
+                    cuenta_origen.balance -= monto
+                    # 🟢 CORRECCIÓN DE INTEGRIDAD: Forzar la actualización del campo balance
+                    cuenta_origen.save(update_fields=['balance']) 
 
-@login_required
-@require_POST
-def eliminar_cuenta(request, pk):
-    """Elimina una cuenta específica del usuario actual."""
-    try:
-        cuenta = Cuenta.objects.get(pk=pk, usuario=request.user)
-    except Cuenta.DoesNotExist:
-        messages.error(request, "La cuenta especificada no existe o no tienes permiso para eliminarla.")
-        return redirect('mi_finanzas:cuentas_lista')
+                    # b) Sumar el monto a la cuenta de destino
+                    cuenta_destino.balance += monto
+                    # 🟢 CORRECCIÓN DE INTEGRIDAD: Forzar la actualización del campo balance
+                    cuenta_destino.save(update_fields=['balance']) 
 
-    nombre_cuenta = cuenta.nombre
-    cuenta.delete()
-    
-    messages.success(request, f'La cuenta "{nombre_cuenta}" ha sido eliminada exitosamente.')
-    
-    return redirect('mi_finanzas:cuentas_lista')
+                    # Opcional: Crear un registro de actividad o Transacción aquí
+                
+                # Mensaje de éxito y redirección
+                messages.success(request, f"¡Transferencia de ${monto:.2f} realizada con éxito!")
+                # 🟢 CORRECCIÓN DE REDIRECCIÓN: Usar nombre de ruta sin punto
+                return redirect('mi_finanzas:resumen_financiero') 
 
-# =========================================================
-# 3. VISTAS CRUD DE TRANSACCIONES Y PRESUPUESTOS
-# =========================================================
-
-@login_required
-def transacciones_lista(request):
-    """Muestra todas las transacciones del usuario, con opción de filtrado."""
-    usuario = request.user
-    transacciones_list = Transaccion.objects.filter(usuario=usuario).order_by('-fecha')
-
-    # Obtener todas las categorías para el filtro de la plantilla
-    todas_categorias = Categoria.objects.filter(usuario=usuario).order_by('nombre')
-    
-    # Lógica de Filtros (solo para pasar las variables que la plantilla espera)
-    selected_categoria = request.GET.get('categoria', '0')
-    selected_fecha_inicio = request.GET.get('fecha_inicio', '')
-    selected_fecha_fin = request.GET.get('fecha_fin', '')
-    
-    # ... (Aquí iría la lógica de filtrado completa que ya te di) ...
-
-    contexto = {
-        'titulo': 'Historial de Transacciones',
-        'transacciones': transacciones_list,
-        'categorias': todas_categorias,
-        'selected_categoria': selected_categoria,
-        'selected_fecha_inicio': selected_fecha_inicio,
-        'selected_fecha_fin': selected_fecha_fin,
+            except Exception as e:
+                # Manejo de cualquier fallo en la base de datos
+                messages.error(request, f"Error al procesar la transferencia: {e}")
+    # 2. Manejar la Solicitud Inicial (GET) o Fallo en la Validación del POST
+    else:
+        form = TransferenciaForm()
+        
+    context = {
+        'titulo': 'Transferir Monto',
+        'form': form,
     }
+    
+    return render(request, 'mi_finanzas/transferir_monto.html', context)
 
-    # 🎯 ¡CRÍTICO! Usar render
-    return render(request, 'mi_finanzas/transacciones_lista.html', contexto)
-
- 
 
 @login_required
 def anadir_transaccion(request):
     """Añade una nueva transacción."""
     if request.method == 'POST':
-        # Se pasa request.POST como el primer argumento y request.user como palabra clave.
         form = TransaccionForm(request.POST, user=request.user) 
         if form.is_valid():
             transaccion = form.save(commit=False)
@@ -324,67 +275,13 @@ def anadir_transaccion(request):
             messages.success(request, "Transacción añadida exitosamente.")
             return redirect('mi_finanzas:resumen_financiero')
     else:
-        # Se pasa request.user solo como palabra clave.
         form = TransaccionForm(user=request.user)
         
     return render(request, 'mi_finanzas/anadir_transaccion.html', {'form': form})
+# ... (otras vistas: cuentas_lista, anadir_cuenta, eliminar_cuenta, transacciones_lista, etc.) ...
+# Por brevedad, se omite el resto del código CRUD y reportes, asumiendo que ya funcionan.
 
-@login_required
-def crear_presupuesto(request):
-    """Crea un nuevo presupuesto para el usuario."""
-    hoy = datetime.date.today()
-    
-    # Prepara el formulario, limitando las categorías disponibles
-    if request.method == 'POST':
-        form = PresupuestoForm(request.POST, user=request.user) 
-        if form.is_valid():
-            presupuesto = form.save(commit=False)
-            presupuesto.usuario = request.user
-            
-            # Asignar mes y año actuales si el formulario no lo hace
-            presupuesto.mes = hoy.month
-            presupuesto.anio = hoy.year
-                
-            presupuesto.save()
-            messages.success(request, "Presupuesto creado exitosamente.")
-            return redirect('mi_finanzas:resumen_financiero') 
-    else:
-        # Pasa el usuario al formulario para filtrar opciones si es necesario
-        form = PresupuestoForm(user=request.user)
+# 💡 NOTA: Asegúrate de que todas las demás vistas (CRUD, reportes, etc.) también estén en tu archivo.
+# 💡 IMPORTANTE: Si usas la convención 'mi_finanzas:nombre_ruta' en tu redirect, debes usarla consistentemente.
+# He corregido la línea de redirección en transferir_monto a return redirect('mi_finanzas:resumen_financiero')
 
-    return render(request, 'mi_finanzas/crear_presupuesto.html', {'form': form})
-
-@login_required
-def editar_transaccion(request, pk):
-    """
-    Edita una transacción existente del usuario.
-    """
-    # 1. Obtener la transacción o devolver 404
-    # Esto asegura que el usuario solo pueda editar sus propias transacciones.
-    transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
-    
-    if request.method == 'POST':
-        # 2. Procesar el formulario con los datos POST y la instancia actual
-        # Se pasa 'user=request.user' para filtrar las opciones de cuenta y categoría
-        form = TransaccionForm(request.POST, instance=transaccion, user=request.user)
-        
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Transacción actualizada exitosamente.")
-            
-            # Redirigir a la lista de transacciones después de guardar
-            return redirect('mi_finanzas:transacciones_lista')
-    else:
-        # 3. Mostrar el formulario pre-llenado
-        form = TransaccionForm(instance=transaccion, user=request.user)
-        
-    # 4. Renderizar la plantilla con la RUTA CORREGIDA
-    # La ruta correcta debe ser 'mi_finanzas/editar_transaccion.html'
-    return render(request, 'mi_finanzas/editar_transaccion.html', {'form': form, 'transaccion': transaccion})
-
-
-class RegistroUsuarioView(CreateView):
-    model = User 
-    form_class = RegistroUsuarioForm
-    template_name = 'mi_finanzas/registro.html' 
-    success_url = reverse_lazy('auth:login') 

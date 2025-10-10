@@ -22,7 +22,10 @@ urlpatterns = [
     path('transacciones/<int:pk>/editar/', views.editar_transaccion, name='editar_transaccion'),
     path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
     
-    # ✅ NUEVA RUTA DE TRANSFERENCIA (¡CORREGIDA!)
-    path('transferir/', views.transferir_monto, name='transferir_monto'), 
+    # ✅ RUTA DE TRANSFERENCIA (Implementada en la sesión anterior)
+    path('transferir/', views.transferir_monto, name='transferir_monto'),
+
+    # 📈 NUEVA RUTA DE REPORTES Y GRÁFICOS (Para esta sesión)
+    path('reportes/', views.reportes_financieros, name='reportes_financieros'), # <-- ¡NUEVA!
 ]
 

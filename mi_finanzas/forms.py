@@ -198,3 +198,36 @@ class RegistroUsuarioForm(UserCreationForm):
         for field in self.fields.values():
             field.widget.attrs.update({'class': 'form-control'})
 
+from django import forms
+from .models import Cuenta # Asumiendo que tienes un modelo Cuenta
+
+class TransferenciaForm(forms.Form):
+    # 1. Campo para el monto
+    monto = forms.DecimalField(
+        label='Monto a transferir',
+        min_value=0.01,
+        max_digits=10,
+        decimal_places=2,
+        # Puedes usar widgets aquí, si los necesitas
+    )
+
+    # 2. Campo para la cuenta de origen (queryset limitado a las cuentas del usuario)
+    cuenta_origen = forms.ModelChoiceField(
+        queryset=Cuenta.objects.all(), # ¡Asegúrate de filtrar por usuario en la vista!
+        label='Cuenta de Origen',
+        empty_label=None
+    )
+
+    # 3. Campo para la cuenta de destino (queryset limitado)
+    cuenta_destino = forms.ModelChoiceField(
+        queryset=Cuenta.objects.all(), # ¡Asegúrate de filtrar por usuario en la vista!
+        label='Cuenta de Destino',
+        empty_label=None
+    )
+
+    # 4. Campo de descripción (opcional)
+    descripcion = forms.CharField(max_length=255, required=False)
+
+    # Opcional: Puedes añadir un método clean para asegurar que origen != destino
+    # def clean(self):
+    #     # ... lógica de validación ...

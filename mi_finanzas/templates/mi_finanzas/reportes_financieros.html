@@ -1,0 +1,122 @@
+{% extends 'base_admin.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container-fluid pt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="h3 mb-4 text-gray-800">{{ titulo }}</h1>
+            <p class="text-secondary">Aquí se mostrarán los gráficos y reportes.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-xl-6 col-lg-6 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Flujo de Caja Mensual (Ingresos vs. Gastos)</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="flujoCajaChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-xl-6 col-lg-6 mb-4">
+            <div class="card shadow mb-4">
+                <div class="card-header py-3">
+                    <h6 class="m-0 font-weight-bold text-primary">Distribución de Gastos por Categoría</h6>
+                </div>
+                <div class="card-body">
+                    <canvas id="distribucionGastosChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+
+<script>
+    // -----------------------------------------------------
+    // 1. Gráfico de Flujo de Caja Mensual (Ingresos vs. Gastos)
+    // -----------------------------------------------------
+    const flujoCajaData = JSON.parse('{{ flujo_caja_json|safe }}');
+    const ctxFlujoCaja = document.getElementById('flujoCajaChart').getContext('2d');
+
+    const flujoCajaChart = new Chart(ctxFlujoCaja, {
+        type: 'bar',
+        data: {
+            labels: flujoCajaData.labels,
+            datasets: [
+                {
+                    label: 'Ingresos',
+                    data: flujoCajaData.ingresos,
+                    backgroundColor: 'rgba(75, 192, 192, 0.8)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Gastos',
+                    data: flujoCajaData.gastos,
+                    backgroundColor: 'rgba(255, 99, 132, 0.8)',
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true
+                }
+            }
+        }
+    });
+</script>
+{% endblock extra_scripts %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+
+<script>
+    // ... (El código del Gráfico de Flujo de Caja Mensual está aquí) ...
+    
+    // -----------------------------------------------------
+    // 2. Gráfico de Distribución de Gastos por Categoría
+    // -----------------------------------------------------
+    const distribucionGastosData = JSON.parse('{{ distribucion_gastos_json|safe }}');
+    const ctxDistribucion = document.getElementById('distribucionGastosChart').getContext('2d');
+
+    const distribucionGastosChart = new Chart(ctxDistribucion, {
+        type: 'pie',
+        data: {
+            labels: distribucionGastosData.labels,
+            datasets: [{
+                data: distribucionGastosData.montos,
+                backgroundColor: [ // Define un color diferente para cada sector
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#A0522D', '#7FFF00'
+                ],
+                hoverBackgroundColor: [
+                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#A0522D', '#7FFF00'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: 'top',
+                },
+                title: {
+                    display: false,
+                }
+            }
+        }
+    });
+</script>
+{% endblock extra_scripts %}
+
