@@ -360,3 +360,60 @@ def eliminar_cuenta(request, pk):
     messages.success(request, f"Cuenta '{cuenta.nombre}' eliminada exitosamente.")
     return redirect('mi_finanzas:cuentas_lista')
 
+
+@login_required
+def editar_transaccion(request, pk):
+    """
+    Vista para editar una transacción existente.
+    """
+    # 1. Obtener la transacción, asegurando que pertenezca al usuario actual (seguridad)
+    transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
+    
+    # CRÍTICO: Guardar el monto y la cuenta viejos antes de que el formulario los cambie.
+    # Esto es necesario para revertir el cambio de balance en la cuenta anterior.
+    monto_viejo = transaccion.monto
+    cuenta_vieja = transaccion.cuenta
+    
+    if request.method == 'POST':
+        form = TransaccionForm(request.POST, user=request.user, instance=transaccion) 
+        
+        if form.is_valid():
+            # 2. Revertir el balance anterior (suma o resta del monto viejo)
+            # Esto debe hacerse ANTES de guardar la transacción, o en una transacción atómica.
+            
+            with transaction.atomic():
+                # Revertir el efecto de la transacción original en la cuenta vieja
+                if transaccion.tipo == 'INGRESO':
+                    cuenta_vieja.balance -= monto_viejo
+                else: # GASTO
+                    cuenta_vieja.balance += monto_viejo
+                cuenta_vieja.save(update_fields=['balance'])
+                
+                # 3. Guardar la nueva transacción
+                transaccion_nueva = form.save(commit=False)
+                transaccion_nueva.usuario = request.user
+                transaccion_nueva.save()
+                
+                # 4. Aplicar el nuevo efecto a la nueva cuenta
+                cuenta_nueva = transaccion_nueva.cuenta
+                monto_nuevo = transaccion_nueva.monto
+                
+                if transaccion_nueva.tipo == 'INGRESO':
+                    cuenta_nueva.balance += monto_nuevo
+                else: # GASTO
+                    cuenta_nueva.balance -= monto_nuevo
+                cuenta_nueva.save(update_fields=['balance'])
+            
+            messages.success(request, f"Transacción de {transaccion_nueva.tipo} actualizada exitosamente.")
+            return redirect('mi_finanzas:transacciones_lista') 
+            
+    else:
+        # Instanciar el formulario con los datos actuales de la transacción
+        form = TransaccionForm(user=request.user, instance=transaccion)
+        
+    context = {
+        'form': form,
+        'titulo': f'Editar Transacción: {transaccion.descripcion}'
+    }
+    return render(request, 'mi_finanzas/editar_transaccion.html', context)
+
