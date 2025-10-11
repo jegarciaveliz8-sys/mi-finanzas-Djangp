@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, DecimalField, F, Case, When
+from django.db.models import Sum, DecimalField
 from django.db.models.functions import Coalesce
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
@@ -9,7 +9,7 @@ from django.views.generic import CreateView
 from django.contrib.auth.models import User 
 from django.views.decorators.http import require_POST 
 from django.db import transaction # Importación esencial para transacciones atómicas
-from django.utils import timezone  # 💡 IMPORTACIÓN AÑADIDA/CONFIRMADA para Presupuestos
+from django.utils import timezone  # Importación para manejar fechas y tiempos
 
 import json
 import datetime
@@ -41,7 +41,7 @@ class RegistroUsuario(CreateView):
 
 
 # =========================================================
-# 1. VISTA DE RESUMEN (PANEL DE CONTROL)
+# 1. VISTA DE RESUMEN (PANEL DE CONTROL) - OPTIMIZADA
 # =========================================================
 
 @login_required
@@ -50,40 +50,35 @@ def resumen_financiero(request):
     hoy = datetime.date.today()
     mes_actual = hoy.month
     anio_actual = hoy.year
+    
+    # 💡 OPTIMIZACIÓN 1: QuerySet Base para el mes actual
+    # Esto evita repetir filtros de usuario, mes y año en cada consulta (Elimina consultas repetidas)
+    transacciones_mes_base = Transaccion.objects.filter(
+        usuario=usuario, 
+        fecha__month=mes_actual, 
+        fecha__year=anio_actual
+    )
 
-    # --- CÁLCULO DE MÉTRICAS GLOBALES (Saldo Total Neto, Ingresos, Gastos) ---
+    # --- CÁLCULO DE MÉTRICAS GLOBALES ---
     saldo_total_neto = Cuenta.objects.filter(usuario=usuario).aggregate(
         total=Coalesce(Sum('balance'), Decimal(0.00), output_field=DecimalField())
     )['total']
     
-    # --- MÉTRICAS MENSUALES ---
-    ingresos_del_mes = Transaccion.objects.filter(
-        usuario=usuario, 
-        tipo='INGRESO', 
-        fecha__month=mes_actual, 
-        fecha__year=anio_actual
-    ).aggregate(
+    # --- MÉTRICAS MENSUALES (Usando el QuerySet Base) ---
+    ingresos_del_mes = transacciones_mes_base.filter(tipo='INGRESO').aggregate(
         total=Coalesce(Sum('monto'), Decimal(0.00), output_field=DecimalField())
     )['total']
     
-    gastos_del_mes = Transaccion.objects.filter(
-        usuario=usuario, 
-        tipo='GASTO', 
-        fecha__month=mes_actual, 
-        fecha__year=anio_actual
-    ).aggregate(
+    gastos_del_mes = transacciones_mes_base.filter(tipo='GASTO').aggregate(
         total=Coalesce(Sum('monto'), Decimal(0.00), output_field=DecimalField())
     )['total']
     
-    # --- LISTA DE CUENTAS (para mostrar en el resumen) ---
+    # --- LISTA DE CUENTAS ---
     cuentas = Cuenta.objects.filter(usuario=usuario).order_by('nombre')
     
     # --- DATOS PARA GRÁFICO DE GASTOS ---
-    gastos_por_categoria = Transaccion.objects.filter(
-        usuario=usuario,
+    gastos_por_categoria = transacciones_mes_base.filter(
         tipo='GASTO',
-        fecha__month=mes_actual,
-        fecha__year=anio_actual
     ).values('categoria__nombre').annotate(
         total=Coalesce(Sum('monto'), Decimal(0.00))
     ).order_by('-total')
@@ -99,17 +94,21 @@ def resumen_financiero(request):
     }
     chart_data_json = json.dumps(chart_data)
 
-    # --- LÓGICA DE PRESUPUESTOS ---
-    presupuestos = Presupuesto.objects.filter(usuario=usuario, mes=mes_actual, anio=anio_actual)
+    # --- LÓGICA DE PRESUPUESTOS (N+1 Resuelto) ---
+    # 💡 OPTIMIZACIÓN 2: Usamos select_related('categoria') para cargar la categoría
+    presupuestos = Presupuesto.objects.filter(
+        usuario=usuario, 
+        mes=mes_actual, 
+        anio=anio_actual
+    ).select_related('categoria') # ⬅️ CLAVE: Elimina consultas por cada presupuesto
+    
     resultados_presupuesto = []
     
     for presupuesto in presupuestos:
-        gasto_real = Transaccion.objects.filter(
-            usuario=usuario,
+        # Filtramos los gastos del mes por la categoría
+        gasto_real = transacciones_mes_base.filter(
             tipo='GASTO',
             categoria=presupuesto.categoria,
-            fecha__month=mes_actual,
-            fecha__year=anio_actual
         ).aggregate(
             total=Coalesce(Sum('monto'), Decimal(0.00))
         )['total']
@@ -124,7 +123,7 @@ def resumen_financiero(request):
             color_barra = 'bg-warning'
         else:
             color_barra = 'bg-danger'
-                 
+            
         resultados_presupuesto.append({
             'categoria_nombre': presupuesto.categoria.nombre,
             'limite': limite,
@@ -134,9 +133,12 @@ def resumen_financiero(request):
             'color_barra': color_barra
         })
 
-    # --- ACTIVIDAD RECIENTE ---
-    ultimas_transacciones = Transaccion.objects.filter(usuario=usuario).order_by('-fecha')[:5]
-
+    # --- ACTIVIDAD RECIENTE (N+1 Resuelto) ---
+    # 💡 OPTIMIZACIÓN 3: select_related para cargar cuenta y categoría al instante
+    ultimas_transacciones = Transaccion.objects.filter(usuario=usuario).select_related(
+        'cuenta', 'categoria'
+    ).order_by('-fecha')[:5] # ⬅️ CLAVE: Elimina consultas por cada transacción
+    
     # --- LÓGICA DEL MENSAJE DE SALUD FINANCIERA ---
     if float(saldo_total_neto) > 500: 
         estado_financiero = {
@@ -199,7 +201,7 @@ def transferir_monto(request):
                     # Sumar y guardar (update_fields garantiza atomicidad)
                     cuenta_destino.balance += monto
                     cuenta_destino.save(update_fields=['balance']) 
-                
+                 
                 messages.success(request, f"¡Transferencia de ${monto:.2f} realizada con éxito!")
                 return redirect('mi_finanzas:resumen_financiero') 
 
@@ -233,8 +235,7 @@ def anadir_transaccion(request):
                 with transaction.atomic():
                     # 2. Asignar el usuario y el campo 'idao'
                     transaccion.usuario = request.user
-                    # 💡 CORRECCIÓN: Asignar 'idao' para evitar NOT NULL constraint failed
-                    # Asumimos que 'idao' es un alias o campo para el usuario actual
+                    # 💡 CORRECCIÓN (Mantenida): Asignar 'idao' si es necesario por el modelo
                     transaccion.idao = request.user 
                     
                     transaccion.save()
@@ -269,7 +270,7 @@ def editar_transaccion(request, pk):
     
     # 1. CRÍTICO: Guardar el monto, tipo y cuenta viejos ANTES de que el formulario los cambie.
     monto_viejo = transaccion.monto
-    tipo_viejo = transaccion.tipo # CRÍTICO: Necesitamos el tipo viejo para la reversión
+    tipo_viejo = transaccion.tipo 
     cuenta_vieja = transaccion.cuenta
     
     if request.method == 'POST':
@@ -301,7 +302,6 @@ def editar_transaccion(request, pk):
                     cuenta_nueva.balance -= monto_nuevo
                 
                 # Guardar el nuevo balance
-                # Si la cuenta vieja es diferente a la nueva, ambas cuentas quedan guardadas.
                 cuenta_nueva.save(update_fields=['balance'])
             
             messages.success(request, f"Transacción de {transaccion_nueva.tipo} actualizada exitosamente.")
@@ -334,10 +334,10 @@ def eliminar_transaccion(request, pk):
                 cuenta.balance -= transaccion.monto
             else: # GASTO
                 cuenta.balance += transaccion.monto
-            
+             
             # 2. Guardar el nuevo balance de la cuenta
             cuenta.save(update_fields=['balance'])
-            
+             
             # 3. Eliminar la transacción
             transaccion.delete()
 
@@ -354,7 +354,10 @@ def transacciones_lista(request):
     """
     Muestra una lista de todas las transacciones del usuario.
     """
-    transacciones = Transaccion.objects.filter(usuario=request.user).order_by('-fecha')
+    # 💡 OPTIMIZACIÓN: Añadir select_related para evitar N+1 al listar
+    transacciones = Transaccion.objects.filter(usuario=request.user).select_related(
+        'cuenta', 'categoria'
+    ).order_by('-fecha')
     
     context = {
         'transacciones': transacciones,
@@ -461,18 +464,18 @@ def crear_presupuesto(request):
         if form.is_valid():
             presupuesto = form.save(commit=False)
             presupuesto.usuario = request.user
-            
-            # 💡 CORRECCIÓN 1: Asignar el mes y año como enteros (para resolver IntegrityError y TypeError)
+             
+            # 💡 CORRECCIÓN (Mantenida): Asignar el mes y año como enteros
             now = timezone.now()
-            presupuesto.mes = now.month    # Asigna el número del mes (10 para Octubre)
-            presupuesto.anio = now.year    # Asigna el año (2025)
-            
+            presupuesto.mes = now.month
+            presupuesto.anio = now.year
+             
             presupuesto.save()
             messages.success(request, "¡Presupuesto creado exitosamente!")
             return redirect('mi_finanzas:resumen_financiero') 
     else:
         form = PresupuestoForm(user=request.user)
-        
+         
     context = {
         'form': form,
         'titulo': 'Crear Nuevo Presupuesto'
@@ -489,7 +492,7 @@ def editar_presupuesto(request, pk):
     
     if request.method == 'POST':
         form = PresupuestoForm(request.POST, user=request.user, instance=presupuesto)
-        
+         
         if form.is_valid():
             presupuesto_editado = form.save(commit=False)
             presupuesto_editado.usuario = request.user
@@ -499,7 +502,7 @@ def editar_presupuesto(request, pk):
             
     else:
         form = PresupuestoForm(user=request.user, instance=presupuesto)
-        
+         
     context = {
         'form': form,
         'titulo': f'Editar Presupuesto: {presupuesto.categoria.nombre}'
@@ -518,10 +521,10 @@ def eliminar_presupuesto(request, pk):
     try:
         nombre_categoria = presupuesto.categoria.nombre
         presupuesto.delete()
-        
+         
         messages.success(request, f"El presupuesto para '{nombre_categoria}' ha sido eliminado.")
         return redirect('mi_finanzas:resumen_financiero')
-        
+         
     except Exception as e:
         messages.error(request, f"Error al eliminar el presupuesto: {e}")
         return redirect('mi_finanzas:resumen_financiero')
@@ -538,6 +541,7 @@ def reportes_financieros(request):
     """
     usuario = request.user
     
+    # 💡 OPTIMIZACIÓN: Añadir select_related('categoria') si es necesario
     gastos_totales_por_categoria = Transaccion.objects.filter(
         usuario=usuario,
         tipo='GASTO'
@@ -550,3 +554,4 @@ def reportes_financieros(request):
         'gastos_por_categoria': gastos_totales_por_categoria,
     }
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
+
