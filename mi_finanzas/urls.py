@@ -1,3 +1,4 @@
+
 from django.urls import path
 from . import views
 
@@ -20,7 +21,8 @@ urlpatterns = [
     path('', views.resumen_financiero, name='resumen_financiero'),
     path('resumen/', views.resumen_financiero, name='resumen_financiero'), 
     path('cuentas/', views.cuentas_lista, name='cuentas_lista'),
-    path('transacciones/', views.transacciones_lista, name='transacciones_lista'), 
+    # 🛑 CORRECCIÓN: Se cambió 'transacciones/' por 'transacciones/lista/'
+    path('transacciones/lista/', views.transacciones_lista, name='transacciones_lista'), 
     
     # =========================================================
     # 3. CRUD de Cuentas
@@ -34,19 +36,16 @@ urlpatterns = [
     # =========================================================
     path('anadir_transaccion/', views.anadir_transaccion, name='anadir_transaccion'),
     path('transacciones/<int:pk>/editar/', views.editar_transaccion, name='editar_transaccion'),
-    # ✅ RUTA AÑADIDA: ELIMINAR TRANSACCIÓN (Completa el CRUD)
     path('transacciones/<int:pk>/eliminar/', views.eliminar_transaccion, name='eliminar_transaccion'),
     
-    # ✅ RUTA DE TRANSFERENCIA (Implementada con lógica atómica)
+    # ✅ RUTA DE TRANSFERENCIA
     path('transferir/', views.transferir_monto, name='transferir_monto'),
 
     # =========================================================
     # 5. CRUD de Presupuestos
     # =========================================================
     path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
-    # ✅ RUTA AÑADIDA: EDITAR PRESUPUESTO
     path('presupuesto/<int:pk>/editar/', views.editar_presupuesto, name='editar_presupuesto'),
-    # ✅ RUTA AÑADIDA: ELIMINAR PRESUPUESTO
     path('presupuesto/<int:pk>/eliminar/', views.eliminar_presupuesto, name='eliminar_presupuesto'),
 
     # =========================================================
@@ -54,4 +53,3 @@ urlpatterns = [
     # =========================================================
     path('reportes/', views.reportes_financieros, name='reportes_financieros'),
 ]
-
