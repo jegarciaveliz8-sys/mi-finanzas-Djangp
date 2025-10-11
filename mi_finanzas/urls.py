@@ -8,11 +8,11 @@ app_name = 'mi_finanzas'
 urlpatterns = [
     
     # =========================================================
-    # 1. Rutas de Autenticación (¡CRÍTICA!)
+    # 1. Rutas de Autenticación (CRÍTICA)
     # =========================================================
-    # ✅ Añadida la ruta de registro, asumiendo que la clase en views.py se llama RegistroUsuario
     path('registro/', views.RegistroUsuario.as_view(), name='registro'), 
-    # path('login/', views.LoginView.as_view(), name='login'), # (Asumiendo que usarás la vista de Django o una personalizada)
+    # NOTA: Asegúrate de que tu proyecto principal (settings.py) 
+    # tenga definidas las rutas de login/logout por defecto.
     
     # =========================================================
     # 2. Rutas de Vistas Principales (Dashboard y Listados)
@@ -34,13 +34,23 @@ urlpatterns = [
     # =========================================================
     path('anadir_transaccion/', views.anadir_transaccion, name='anadir_transaccion'),
     path('transacciones/<int:pk>/editar/', views.editar_transaccion, name='editar_transaccion'),
-    path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
+    # ✅ RUTA AÑADIDA: ELIMINAR TRANSACCIÓN (Completa el CRUD)
+    path('transacciones/<int:pk>/eliminar/', views.eliminar_transaccion, name='eliminar_transaccion'),
     
     # ✅ RUTA DE TRANSFERENCIA (Implementada con lógica atómica)
     path('transferir/', views.transferir_monto, name='transferir_monto'),
 
     # =========================================================
-    # 5. Reportes
+    # 5. CRUD de Presupuestos
+    # =========================================================
+    path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
+    # ✅ RUTA AÑADIDA: EDITAR PRESUPUESTO
+    path('presupuesto/<int:pk>/editar/', views.editar_presupuesto, name='editar_presupuesto'),
+    # ✅ RUTA AÑADIDA: ELIMINAR PRESUPUESTO
+    path('presupuesto/<int:pk>/eliminar/', views.eliminar_presupuesto, name='eliminar_presupuesto'),
+
+    # =========================================================
+    # 6. Reportes
     # =========================================================
     path('reportes/', views.reportes_financieros, name='reportes_financieros'),
 ]

@@ -501,3 +501,29 @@ def editar_presupuesto(request, pk):
     }
     return render(request, 'mi_finanzas/editar_presupuesto.html', context)
 
+
+
+from django.views.decorators.http import require_POST # Asegúrate de que esta importación esté presente
+
+@login_required
+@require_POST  # Usa require_POST para mayor seguridad al eliminar
+def eliminar_presupuesto(request, pk):
+    """
+    Vista para eliminar un presupuesto existente.
+    """
+    # 1. Obtener el presupuesto y asegurar la propiedad del usuario
+    presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
+    
+    try:
+        # 2. Eliminar el objeto de la base de datos
+        # No se requiere transaction.atomic() ya que no afecta saldos de cuentas
+        nombre_categoria = presupuesto.categoria.nombre # Guardamos el nombre antes de borrar
+        presupuesto.delete()
+        
+        messages.success(request, f"El presupuesto para '{nombre_categoria}' ha sido eliminado.")
+        return redirect('mi_finanzas:resumen_financiero') # Redirigir al panel
+    
+    except Exception as e:
+        messages.error(request, f"Error al eliminar el presupuesto: {e}")
+        return redirect('mi_finanzas:resumen_financiero')
+
