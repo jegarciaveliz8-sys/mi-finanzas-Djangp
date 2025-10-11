@@ -1,0 +1,18 @@
+{% extends "mi_finanzas/base.html" %} 
+{% block content %}
+
+    <h2>Registrar Nuevo Usuario</h2>
+
+    <form method="POST">
+        
+        {% csrf_token %} 
+        
+        {{ form.as_p }}
+        
+        <button type="submit">Registrarme</button>
+    </form>
+
+    <p>¿Ya tienes una cuenta? <a href="{% url 'login' %}">Inicia sesión aquí</a>.</p>
+
+{% endblock content %}
+
