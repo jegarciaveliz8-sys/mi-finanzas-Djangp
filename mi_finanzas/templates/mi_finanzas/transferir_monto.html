@@ -1,55 +1,110 @@
-{% extends "mi_finanzas/base.html" %} 
+{% extends 'base.html' %}
+{% load crispy_forms_tags %} 
+
+{% block title %}Realizar Transferencia{% endblock title %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="row justify-content-center">
-        <div class="col-md-8">
-            <h2 class="mb-4 text-primary">{{ titulo }}</h2>
 
-            {% if messages %}
-                <ul class="messages list-unstyled">
+<div class="row justify-content-center mt-5">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-lg">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">Realizar Transferencia</h2>
+            </div>
+            <div class="card-body">
+
+                {# Muestra los mensajes flash (éxito, error de saldo, etc.) #}
+                {% if messages %}
                     {% for message in messages %}
-                        <li class="alert alert-{{ message.tags }} p-2">
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
                             {{ message }}
-                        </li>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
                     {% endfor %}
-                </ul>
-            {% endif %}
+                {% endif %}
 
-            <div class="card p-4 shadow-sm">
-                <form method="post" action="{% url 'mi_finanzas:transferir_monto' %}">
+                <form method="post">
                     {% csrf_token %}
-                    
+
+                    {# ---------------------------------------------------- #}
+                    {# 1. ERRORES NO RELACIONADOS CON CAMPOS (GLOBALES)    #}
+                    {# ---------------------------------------------------- #}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger mb-3">
+                            <p class="mb-0"><strong>Error en la Transferencia:</strong></p>
+                            {{ form.non_field_errors }} 
+                        </div>
+                    {% endif %}
+
+                    {# ---------------------------------------------------- #}
+                    {# 2. CAMPOS DEL FORMULARIO CON SUS ERRORES ASOCIADOS #}
+                    {# ---------------------------------------------------- #}
+
                     <div class="mb-3">
-                        <label for="{{ form.cuenta_origen.id_for_label }}" class="form-label">Cuenta de Origen (De)</label>
+                        <label for="{{ form.cuenta_origen.id_for_label }}" class="form-label">
+                            Cuenta de Origen (De)
+                        </label>
                         {{ form.cuenta_origen }}
+                        {% for error in form.cuenta_origen.errors %}
+                            <div class="alert alert-danger p-2 mt-1">{{ error }}</div>
+                        {% endfor %}
                         <div class="form-text text-muted">Selecciona la cuenta de la que saldrá el dinero.</div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="{{ form.cuenta_destino.id_for_label }}" class="form-label">Cuenta de Destino (A)</label>
+                        <label for="{{ form.cuenta_destino.id_for_label }}" class="form-label">
+                            Cuenta de Destino (A)
+                        </label>
                         {{ form.cuenta_destino }}
+                        {% for error in form.cuenta_destino.errors %}
+                            <div class="alert alert-danger p-2 mt-1">{{ error }}</div>
+                        {% endfor %}
                         <div class="form-text text-muted">Selecciona la cuenta que recibirá el dinero.</div>
                     </div>
 
                     <div class="mb-3">
-                        <label for="{{ form.monto.id_for_label }}" class="form-label">Monto a Transferir ($)</label>
+                        <label for="{{ form.monto.id_for_label }}" class="form-label">
+                            Monto a Transferir ($)
+                        </label>
                         {{ form.monto }}
+                        {% for error in form.monto.errors %}
+                            <div class="alert alert-danger p-2 mt-1">{{ error }}</div>
+                        {% endfor %}
                         <div class="form-text text-muted">Asegúrate de tener saldo suficiente en la cuenta de origen.</div>
                     </div>
 
-                    {% if form.errors %}
-                        <div class="alert alert-danger mt-3">
-                            <strong>Errores del Formulario:</strong>
-                            {{ form.non_field_errors }}
-                        </div>
-                    {% endif %}
+                    <div class="mb-3">
+                        <label for="{{ form.fecha.id_for_label }}" class="form-label">
+                            Fecha de Transferencia
+                        </label>
+                        {{ form.fecha }}
+                        {% for error in form.fecha.errors %}
+                            <div class="alert alert-danger p-2 mt-1">{{ error }}</div>
+                        {% endfor %}
+                    </div>
 
-                    <button type="submit" class="btn btn-primary mt-3">Realizar Transferencia</button>
-                    <a href="{% url 'mi_finanzas:resumen_financiero' %}" class="btn btn-secondary mt-3">Cancelar</a>
+                    <div class="mb-3">
+                        <label for="{{ form.descripcion.id_for_label }}" class="form-label">
+                            Descripción (Opcional)
+                        </label>
+                        {{ form.descripcion }}
+                        {% for error in form.descripcion.errors %}
+                            <div class="alert alert-danger p-2 mt-1">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <button type="submit" class="btn btn-success btn-lg w-100 mt-3">
+                        <i class="fas fa-exchange-alt"></i> Transferir Ahora
+                    </button>
+                    <a href="{% url 'mi_finanzas:resumen_financiero' %}" class="btn btn-outline-secondary w-100 mt-2">
+                        Cancelar
+                    </a>
                 </form>
+
             </div>
         </div>
     </div>
 </div>
+
 {% endblock content %}
+
