@@ -448,7 +448,7 @@ def eliminar_cuenta(request, pk):
 # 4. VISTAS DE PRESUPUESTOS
 # =========================================================
 
-from django.utils import timezone  # 💡 IMPORTAR para trabajar con fechas y horas
+from django.utils import timezone  # Asegúrate de tener esta importación arriba
 
 @login_required
 def crear_presupuesto(request):
@@ -461,10 +461,13 @@ def crear_presupuesto(request):
             presupuesto = form.save(commit=False)
             presupuesto.usuario = request.user
             
-            # 💡 SOLUCIÓN AÑADIDA: Asignar el campo 'mes'
-            # Asignamos el primer día del mes actual (Octubre 2025)
+            # 💡 CORRECCIÓN: Asignar el número entero del mes actual.
+            # Esto resuelve el TypeError que esperaba un 'number' (entero).
             now = timezone.now()
-            presupuesto.mes = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            presupuesto.mes = now.month  # Asigna '10' para Octubre
+            
+            # NOTA: Si tu modelo también tiene un campo 'anio',
+            # DEBES añadir la línea: presupuesto.anio = now.year
             
             presupuesto.save()
             messages.success(request, "¡Presupuesto creado exitosamente!")
@@ -477,7 +480,6 @@ def crear_presupuesto(request):
         'titulo': 'Crear Nuevo Presupuesto'
     }
     return render(request, 'mi_finanzas/crear_presupuesto.html', context)
-
 
 
 @login_required
