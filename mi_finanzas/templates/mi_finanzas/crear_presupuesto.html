@@ -1,37 +1,55 @@
 {% extends "mi_finanzas/base.html" %} 
-{# La carga de crispy_forms_tags está COMENTADA para evitar el error TemplateDoesNotExist #}
-{# {% load crispy_forms_tags %} #}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card mt-4">
-            <div class="card-header bg-success text-white">
-                <h2>Crear Nuevo Presupuesto Mensual</h2>
-            </div>
-            <div class="card-body">
-                
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h2 class="mb-4">Crear Nuevo Presupuesto Mensual</h2>
+
+            {% if messages %}
+                <ul class="messages list-unstyled">
+                    {% for message in messages %}
+                        <li class="alert alert-{{ message.tags }} p-2">
+                            {{ message }}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <div class="card p-4 shadow-sm">
                 <form method="post" action="{% url 'mi_finanzas:crear_presupuesto' %}">
                     {% csrf_token %}
                     
-                    {# Renderizado simple de Django, sin estilos fancy #}
-                    {{ form.as_p }} 
+                    <div class="mb-3">
+                        <label for="{{ form.categoria.id_for_label }}" class="form-label">Categoría</label>
+                        {{ form.categoria }}
+                    </div>
 
-                    <p class="text-muted small mt-3">
-                        **Nota:** El sistema asignará automáticamente este presupuesto a tu usuario.
-                    </p>
+                    <div class="mb-3">
+                        <label for="{{ form.monto_limite.id_for_label }}" class="form-label">Monto Límite ($)</label>
+                        {{ form.monto_limite }}
+                        <small class="form-text text-muted">{{ form.monto_limite.help_text }}</small>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.mes.id_for_label }}" class="form-label">Mes</label>
+                            {{ form.mes }}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="{{ form.anio.id_for_label }}" class="form-label">Año</label>
+                            {{ form.anio }}
+                        </div>
+                    </div>
                     
-                    <button type="submit" class="btn btn-success btn-block mt-3">
-                        Guardar Presupuesto
-                    </button>
-                    
-                    <a href="{% url 'mi_finanzas:resumen_financiero' %}" class="btn btn-secondary mt-3">
-                        Cancelar
-                    </a>
+                    <button type="submit" class="btn btn-success mt-3">Guardar Presupuesto</button>
+                    <a href="{% url 'mi_finanzas:resumen_financiero' %}" class="btn btn-secondary mt-3">Cancelar</a>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
 {% endblock content %}
 

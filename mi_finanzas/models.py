@@ -155,3 +155,40 @@ class Presupuesto(models.Model):
     def __str__(self):
         return f"Presupuesto {self.categoria.nombre} ({self.mes}/{self.anio}) - ${self.monto_limite}"
 
+
+
+from django import forms
+from .models import Cuenta, Transaccion, Presupuesto, Categoria
+from django.utils import timezone # Para obtener la fecha actual por defecto
+
+# --- Formulario de Presupuestos ---
+class PresupuestoForm(forms.ModelForm):
+    # El usuario no debe seleccionar su propio ID, se asigna en la vista.
+    # El mes y el año se inicializan al mes actual.
+    
+    class Meta:
+        model = Presupuesto
+        fields = ['categoria', 'monto_limite', 'mes', 'anio']
+        widgets = {
+            # Establecer los valores por defecto al mes y año actual
+            'mes': forms.Select(attrs={'class': 'form-control'}, 
+                                choices=[(i, str(i)) for i in range(1, 13)]),
+            'anio': forms.NumberInput(attrs={'class': 'form-control', 
+                                              'min': timezone.localdate().year,
+                                              'max': timezone.localdate().year + 5}),
+            'monto_limite': forms.NumberInput(attrs={'class': 'form-control', 'min': '0.01'}),
+            'categoria': forms.Select(attrs={'class': 'form-control'}),
+        }
+
+    # CRÍTICO: Sobreescribir el __init__ para filtrar categorías por usuario
+    def __init__(self, *args, **kwargs):
+        # El pop() es para obtener el usuario antes de inicializar el form
+        self.request = kwargs.pop('request', None) 
+        super().__init__(*args, **kwargs)
+        
+        if self.request and self.request.user.is_authenticated:
+            # Filtra las categorías disponibles solo a las del usuario actual
+            self.fields['categoria'].queryset = Categoria.objects.filter(
+                usuario=self.request.user
+            ).order_by('nombre')
+

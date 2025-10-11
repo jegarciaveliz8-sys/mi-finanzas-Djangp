@@ -569,3 +569,61 @@ def reportes_financieros(request):
     }
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
 
+
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.db import transaction, IntegrityError # Necesitamos IntegrityError
+from django.contrib import messages
+from django.utils import timezone
+# ... y tu nuevo formulario
+from .forms import PresupuestoForm 
+# ...
+
+@login_required
+def crear_presupuesto(request):
+    """
+    Vista para crear un nuevo presupuesto, asegurando que no haya duplicados 
+    por usuario, categoría, mes y año (gracias al unique_together del modelo).
+    """
+    if request.method == 'POST':
+        # Pasamos el request al formulario para que pueda filtrar las categorías
+        form = PresupuestoForm(request.POST, request=request)
+        
+        if form.is_valid():
+            try:
+                # 1. Guardar la instancia sin guardarla en la BD (commit=False)
+                presupuesto = form.save(commit=False)
+                
+                # 2. Asignar el usuario actual (obligatorio en tu modelo)
+                presupuesto.usuario = request.user
+                
+                # 3. Intentar guardar
+                presupuesto.save()
+                
+                messages.success(request, f'Presupuesto para {presupuesto.categoria.nombre} creado exitosamente.')
+                # TODO: Cambiar 'resumen_financiero' por la vista de listado de presupuestos
+                return redirect('mi_finanzas:resumen_financiero') 
+            
+            except IntegrityError:
+                # Captura el error de unique_together si ya existe un presupuesto para ese mes/categoría
+                messages.error(request, 'Ya existe un presupuesto para esta categoría en el mes y año seleccionados. Por favor, edítalo en su lugar.')
+            
+            except Exception as e:
+                # Para otros errores de base de datos
+                messages.error(request, f'Error al guardar el presupuesto: {e}')
+                
+    else:
+        # 1. Inicializar el formulario con el mes y año actuales
+        initial_data = {
+            'mes': timezone.localdate().month,
+            'anio': timezone.localdate().year,
+        }
+        form = PresupuestoForm(initial=initial_data, request=request)
+        
+    context = {
+        'form': form,
+        'titulo': 'Crear Nuevo Presupuesto'
+    }
+    return render(request, 'mi_finanzas/crear_presupuesto.html', context)
+
