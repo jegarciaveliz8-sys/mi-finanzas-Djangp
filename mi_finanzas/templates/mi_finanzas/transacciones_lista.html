@@ -73,8 +73,15 @@
                 <td class="text-end">$ {{ t.monto|floatformat:2|intcomma }}</td>
                 <td class="text-center">
                     <a href="{% url 'mi_finanzas:editar_transaccion' pk=t.pk %}" class="btn btn-sm btn-info text-white">Editar</a>
-                    {# <a href="{% url 'mi_finanzas:eliminar_transaccion' pk=t.pk %}" class="btn btn-sm btn-danger text-white">Eliminar</a> #}
-                </td>
+                    
+                    <form method="post" action="{% url 'mi_finanzas:eliminar_transaccion' pk=t.pk %}" class="d-inline ms-1">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-danger text-white" 
+                                onclick="return confirm('ATENCIÓN: ¿Estás seguro de que deseas eliminar esta transacción? Esto revertirá el saldo de la cuenta.')">
+                            Eliminar
+                        </button>
+                    </form>
+                    </td>
             </tr>
             {% endfor %}
         </tbody>
