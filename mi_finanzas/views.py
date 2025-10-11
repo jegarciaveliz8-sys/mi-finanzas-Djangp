@@ -336,7 +336,11 @@ def editar_cuenta(request, pk):
         
     context = {
         'form': form,
-        'titulo': f'Editar Cuenta: {cuenta.nombre}'
+        'titulo': f'Editar Cuenta: {cuenta.nombre}',
+        
+        # 🛑 ¡LA LÍNEA CRÍTICA AÑADIDA! 🛑
+        # La plantilla necesita esta variable para construir el enlace de eliminación
+        'cuenta': cuenta 
     }
     return render(request, 'mi_finanzas/editar_cuenta.html', context)
 
