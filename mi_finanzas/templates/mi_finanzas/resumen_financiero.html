@@ -1,7 +1,7 @@
 {% extends 'base.html' %} 
 {% load humanize %} 
 
-{% block title %}Resumen Financiero{% endblock title %}
+{% block title %}Panel de Control{% endblock title %}
 
 {% block content %}
 
@@ -22,7 +22,7 @@
 {# ------------------------------------------ #}
 {# 2. MÉTRICAS CLAVE #}
 {# ------------------------------------------ #}
-<div class="row mb-5">
+<div class="row mb-4">
     <div class="col-md-4">
         <div class="card shadow-sm border-primary">
             <div class="card-body">
@@ -49,10 +49,31 @@
     </div>
 </div>
 
+{# ------------------------------------------ #}
+{# 2.5. BOTONES DE ACCIÓN RÁPIDA (NUEVOS) #}
+{# ------------------------------------------ #}
+<div class="row mb-5 justify-content-center">
+    <div class="col-md-3 mb-2">
+        <a href="{% url 'mi_finanzas:anadir_transaccion' %}" class="btn btn-success btn-block shadow-sm">
+            <i class="fas fa-plus"></i> Registrar Transacción
+        </a>
+    </div>
+    <div class="col-md-3 mb-2">
+        <a href="{% url 'mi_finanzas:transferir_monto' %}" class="btn btn-warning btn-block shadow-sm">
+            <i class="fas fa-exchange-alt"></i> Realizar Transferencia
+        </a>
+    </div>
+    <div class="col-md-3 mb-2">
+        <a href="{% url 'mi_finanzas:reportes_financieros' %}" class="btn btn-info btn-block shadow-sm">
+            <i class="fas fa-chart-pie"></i> Ver Reportes
+        </a>
+    </div>
+</div>
+
 <hr>
 
 {# ------------------------------------------ #}
-{# 3. CUENTAS Y GRÁFICO #}
+{# 3. CUENTAS Y GRÁFICO DE GASTOS #}
 {# ------------------------------------------ #}
 <div class="row">
     
@@ -110,7 +131,7 @@
                             <li class="list-group-item d-flex justify-content-between align-items-center">
                                 {{ gasto.categoria__nombre }}
                                 <span class="font-weight-bold text-danger">
-                                    ${{ gasto.total|floatformat:2|intcomma }} {# ¡CORREGIDO! Eliminamos el guion manual que estaba aquí #}
+                                    ${{ gasto.total|floatformat:2|intcomma }}
                                 </span>
                             </li>
                         {% endfor %}
@@ -126,7 +147,7 @@
 <hr>
 
 {# ------------------------------------------ #}
-{# 4. PRESUPUESTOS #}
+{# 4. PRESUPUESTOS (CON EDICIÓN Y ELIMINACIÓN CORREGIDA) #}
 {# ------------------------------------------ #}
 <h2 class="mt-5">📊 Presupuestos del Mes</h2>
 <div class="row">
@@ -136,8 +157,19 @@
                 <div class="card shadow-sm">
                     <div class="card-header bg-light d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">{{ resultado.categoria_nombre }}</h5>
-                        <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="btn btn-sm btn-outline-secondary">Editar</a>
-                    </div>
+                        
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a href="{% url 'mi_finanzas:editar_presupuesto' resultado.pk %}" class="btn btn-outline-primary" title="Editar">
+                                <i class="fas fa-pen"></i> Editar
+                            </a>
+                            <form method="POST" action="{% url 'mi_finanzas:eliminar_presupuesto' resultado.pk %}" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-outline-danger" title="Eliminar" onclick="return confirm('¿Estás seguro de que quieres eliminar el presupuesto para {{ resultado.categoria_nombre }}?');">
+                                    <i class="fas fa-trash"></i> Eliminar
+                                </button>
+                            </form>
+                        </div>
+                                            </div>
                     <div class="card-body">
                         <p class="card-text small text-muted">
                             Límite: <strong>${{ resultado.limite|floatformat:2|intcomma }}</strong> | 
@@ -164,7 +196,7 @@
             </div>
         {% endfor %}
         <div class="col-md-12 text-center mt-3">
-            <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="btn btn-primary">Añadir/Editar Presupuesto</a>
+            <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="btn btn-primary">Añadir Nuevo Presupuesto</a>
         </div>
     {% else %}
         <div class="col-12">
@@ -206,7 +238,10 @@
                                 <td class="text-right 
                                     {% if transaccion.tipo == 'INGRESO' %}text-success
                                     {% else %}text-danger{% endif %}">
-                                    ${{ transaccion.monto|floatformat:2|intcomma }} {# ¡CORREGIDO! Ya no agregamos el guion aquí #}
+                                    {% if transaccion.tipo == 'GASTO' or transaccion.tipo == 'TRANSFERENCIA' %}
+                                    -
+                                {% endif %}
+                                    ${{ transaccion.monto|floatformat:2|intcomma }}
                                 </td>
                             </tr>
                             {% empty %}
@@ -218,7 +253,6 @@
                     </table>
                 </div>
                 <div class="text-center pt-2">
-                    {# Asumiendo que 'transacciones_lista' será una URL futura #}
                     <a href="#" class="btn btn-sm btn-outline-secondary">Ver todo el historial</a> 
                 </div>
             </div>
@@ -241,7 +275,6 @@
     if (ctx) {
         
         // 1. Parsear los datos de Django a un objeto JavaScript
-        // Utilizamos |safe para evitar el escape de caracteres en el JSON
         const chartDataObject = JSON.parse('{{ chart_data | safe }}'); 
         
         const labels = chartDataObject.labels;
