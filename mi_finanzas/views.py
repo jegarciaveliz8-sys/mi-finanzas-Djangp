@@ -469,3 +469,35 @@ def reportes_financieros(request):
         # Puedes añadir otros datos de reportes aquí
     }
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
+
+
+@login_required
+def editar_presupuesto(request, pk):
+    """
+    Vista para editar un presupuesto existente.
+    """
+    # 1. Obtener el presupuesto, asegurando que pertenezca al usuario
+    presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
+    
+    if request.method == 'POST':
+        # Instanciar el formulario con los datos POST y la instancia existente
+        # Asumiendo que PresupuestoForm fue importado correctamente
+        form = PresupuestoForm(request.POST, user=request.user, instance=presupuesto)
+        
+        if form.is_valid():
+            presupuesto_editado = form.save(commit=False)
+            presupuesto_editado.usuario = request.user # Redundante, pero seguro
+            presupuesto_editado.save()
+            messages.success(request, f"Presupuesto para '{presupuesto_editado.categoria.nombre}' actualizado exitosamente.")
+            return redirect('mi_finanzas:resumen_financiero') # O la lista de presupuestos
+            
+    else:
+        # Instanciar el formulario con los datos actuales
+        form = PresupuestoForm(user=request.user, instance=presupuesto)
+        
+    context = {
+        'form': form,
+        'titulo': f'Editar Presupuesto: {presupuesto.categoria.nombre}'
+    }
+    return render(request, 'mi_finanzas/editar_presupuesto.html', context)
+
