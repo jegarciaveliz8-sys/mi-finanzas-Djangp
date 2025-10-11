@@ -26,7 +26,7 @@ from .forms import (
 
 
 # =========================================================
-# 0. VISTA DE REGISTRO DE USUARIO (La que causó el ImportError)
+# 0. VISTA DE REGISTRO DE USUARIO
 # =========================================================
 
 class RegistroUsuario(CreateView):
@@ -51,29 +51,13 @@ def resumen_financiero(request):
     anio_actual = hoy.year
 
     # --- CÁLCULO DE MÉTRICAS GLOBALES (Saldo Total Neto, Ingresos, Gastos) ---
-    saldo_inicial_cuentas = Cuenta.objects.filter(usuario=usuario).aggregate(
+    # Nota: El Saldo Total Neto se calcula sumando el BALANCE ACTUAL de todas las cuentas.
+    # Es vital que el balance de cada cuenta se actualice al crear/editar/eliminar transacciones.
+    saldo_total_neto = Cuenta.objects.filter(usuario=usuario).aggregate(
         total=Coalesce(Sum('balance'), Decimal(0.00), output_field=DecimalField())
     )['total']
-
-    transacciones_historicas_netas = Transaccion.objects.filter(
-        usuario=usuario
-    ).aggregate(
-        neto=Coalesce(
-            Sum(
-                Case(
-                    When(tipo='INGRESO', then=F('monto')),
-                    When(tipo='GASTO', then=-F('monto')),
-                    default=0,
-                    output_field=DecimalField()
-                )
-            ),
-            Decimal(0.00),
-            output_field=DecimalField()
-        )
-    )['neto']
-
-    saldo_total_neto = saldo_inicial_cuentas + transacciones_historicas_netas
     
+    # --- MÉTRICAS MENSUALES ---
     ingresos_del_mes = Transaccion.objects.filter(
         usuario=usuario, 
         tipo='INGRESO', 
@@ -141,7 +125,7 @@ def resumen_financiero(request):
             color_barra = 'bg-warning'
         else:
             color_barra = 'bg-danger'
-                 
+                
         resultados_presupuesto.append({
             'categoria_nombre': presupuesto.categoria.nombre,
             'limite': limite,
@@ -212,12 +196,11 @@ def transferir_monto(request):
                     # Restar y guardar (update_fields garantiza atomicidad)
                     cuenta_origen.balance -= monto
                     cuenta_origen.save(update_fields=['balance']) 
-                     
-
+                    
                     # Sumar y guardar (update_fields garantiza atomicidad)
                     cuenta_destino.balance += monto
                     cuenta_destino.save(update_fields=['balance']) 
-                 
+                
                 messages.success(request, f"¡Transferencia de ${monto:.2f} realizada con éxito!")
                 return redirect('mi_finanzas:resumen_financiero') 
 
@@ -236,50 +219,138 @@ def transferir_monto(request):
 
 @login_required
 def anadir_transaccion(request):
-    """Añade una nueva transacción."""
+    """Añade una nueva transacción y **ACTUALIZA EL BALANCE DE LA CUENTA** (CORREGIDO)."""
     if request.method == 'POST':
         form = TransaccionForm(request.POST, user=request.user) 
         if form.is_valid():
+            
+            # 1. Obtener los datos necesarios antes de guardar
             transaccion = form.save(commit=False)
-            transaccion.usuario = request.user
-            transaccion.save()
-            messages.success(request, "Transacción añadida exitosamente.")
-            return redirect('mi_finanzas:resumen_financiero')
+            cuenta = transaccion.cuenta
+            monto = transaccion.monto
+            tipo = transaccion.tipo
+            
+            try:
+                with transaction.atomic():
+                    # 2. Guardar la transacción
+                    transaccion.usuario = request.user
+                    transaccion.save()
+                    
+                    # 3. Aplicar el efecto al balance de la cuenta (LÓGICA CRÍTICA)
+                    if tipo == 'INGRESO':
+                        cuenta.balance += monto
+                    else: # GASTO
+                        cuenta.balance -= monto
+                    
+                    # Guardar el nuevo balance de la cuenta
+                    cuenta.save(update_fields=['balance'])
+                
+                messages.success(request, "Transacción añadida y cuenta actualizada exitosamente.")
+                return redirect('mi_finanzas:resumen_financiero')
+
+            except Exception as e:
+                messages.error(request, f"Error al procesar la transacción: {e}")
+                return redirect('mi_finanzas:anadir_transaccion')
     else:
         form = TransaccionForm(user=request.user)
         
     return render(request, 'mi_finanzas/anadir_transaccion.html', {'form': form})
 
 
-# =========================================================
-# 3. VISTAS DE LISTADO Y CRUD DE CUENTAS (LA VISTA FALTANTE)
-# =========================================================
+@login_required
+def editar_transaccion(request, pk):
+    """
+    Vista para editar una transacción existente con **LÓGICA ATÓMICA DE REVERSIÓN Y APLICACIÓN** (CORREGIDO).
+    """
+    transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
+    
+    # 1. CRÍTICO: Guardar el monto, tipo y cuenta viejos ANTES de que el formulario los cambie.
+    monto_viejo = transaccion.monto
+    tipo_viejo = transaccion.tipo # CRÍTICO: Necesitamos el tipo viejo para la reversión
+    cuenta_vieja = transaccion.cuenta
+    
+    if request.method == 'POST':
+        form = TransaccionForm(request.POST, user=request.user, instance=transaccion) 
+        
+        if form.is_valid():
+            
+            with transaction.atomic():
+                # 2. Revertir el efecto de la transacción original en la cuenta vieja
+                if tipo_viejo == 'INGRESO':
+                    cuenta_vieja.balance -= monto_viejo
+                else: # GASTO
+                    cuenta_vieja.balance += monto_viejo
+                cuenta_vieja.save(update_fields=['balance'])
+                
+                # 3. Guardar la nueva transacción
+                transaccion_nueva = form.save(commit=False)
+                transaccion_nueva.usuario = request.user
+                transaccion_nueva.save()
+                
+                # 4. Aplicar el nuevo efecto a la nueva cuenta
+                cuenta_nueva = transaccion_nueva.cuenta
+                monto_nuevo = transaccion_nueva.monto
+                tipo_nuevo = transaccion_nueva.tipo
+
+                if tipo_nuevo == 'INGRESO':
+                    cuenta_nueva.balance += monto_nuevo
+                else: # GASTO
+                    cuenta_nueva.balance -= monto_nuevo
+                
+                # Guardar el nuevo balance
+                # Si la cuenta vieja es diferente a la nueva, ambas cuentas quedan guardadas.
+                cuenta_nueva.save(update_fields=['balance'])
+            
+            messages.success(request, f"Transacción de {transaccion_nueva.tipo} actualizada exitosamente.")
+            return redirect('mi_finanzas:transacciones_lista') 
+            
+    else:
+        form = TransaccionForm(user=request.user, instance=transaccion)
+        
+    context = {
+        'form': form,
+        'titulo': f'Editar Transacción: {transaccion.descripcion}'
+    }
+    return render(request, 'mi_finanzas/editar_transaccion.html', context)
+
 
 @login_required
-def cuentas_lista(request):
+@require_POST
+def eliminar_transaccion(request, pk):
     """
-    Muestra una lista de todas las cuentas del usuario.
-    🛑 ESTA VISTA FUE AÑADIDA PARA RESOLVER EL AttributeError 🛑
+    Vista para eliminar una transacción y revertir su efecto en la cuenta asociada (ATÓMICO).
     """
-    # Filtra solo las cuentas del usuario que ha iniciado sesión
-    cuentas = Cuenta.objects.filter(usuario=request.user).order_by('nombre')
+    transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
+    cuenta = transaccion.cuenta
     
-    context = {
-        'cuentas': cuentas,
-        'titulo': 'Lista de Cuentas'
-    }
-    return render(request, 'mi_finanzas/cuentas_lista.html', context)
+    try:
+        # El proceso de eliminación es atómico
+        with transaction.atomic():
+            # 1. Revertir el efecto de la transacción antes de eliminarla
+            if transaccion.tipo == 'INGRESO':
+                cuenta.balance -= transaccion.monto
+            else: # GASTO
+                cuenta.balance += transaccion.monto
+            
+            # 2. Guardar el nuevo balance de la cuenta
+            cuenta.save(update_fields=['balance'])
+            
+            # 3. Eliminar la transacción
+            transaccion.delete()
 
+        messages.success(request, f"Transacción de '{transaccion.descripcion}' eliminada y balance revertido.")
+        return redirect('mi_finanzas:transacciones_lista')
 
-# ... (Asegúrate de que tus otras vistas como anadir_cuenta, editar_cuenta, 
-# transacciones_lista, reportes_financieros, etc., estén implementadas después de aquí) ...
+    except Exception as e:
+        messages.error(request, f"Error al eliminar la transacción: {e}")
+        return redirect('mi_finanzas:transacciones_lista')
+
 
 @login_required
 def transacciones_lista(request):
     """
     Muestra una lista de todas las transacciones del usuario.
     """
-    # Filtra solo las transacciones del usuario y ordena por fecha descendente
     transacciones = Transaccion.objects.filter(usuario=request.user).order_by('-fecha')
     
     context = {
@@ -289,20 +360,36 @@ def transacciones_lista(request):
     return render(request, 'mi_finanzas/transacciones_lista.html', context)
 
 
+# =========================================================
+# 3. VISTAS DE LISTADO Y CRUD DE CUENTAS
+# =========================================================
+
+@login_required
+def cuentas_lista(request):
+    """
+    Muestra una lista de todas las cuentas del usuario.
+    """
+    cuentas = Cuenta.objects.filter(usuario=request.user).order_by('nombre')
+    
+    context = {
+        'cuentas': cuentas,
+        'titulo': 'Lista de Cuentas'
+    }
+    return render(request, 'mi_finanzas/cuentas_lista.html', context)
+
+
 @login_required
 def anadir_cuenta(request):
     """
     Vista para añadir una nueva cuenta financiera.
     """
     if request.method == 'POST':
-        # Nota: Asumiendo que CuentaForm fue importado correctamente
         form = CuentaForm(request.POST) 
         if form.is_valid():
             cuenta = form.save(commit=False)
             cuenta.usuario = request.user
             cuenta.save()
             messages.success(request, "Cuenta añadida exitosamente.")
-            # Redirección a la lista de cuentas
             return redirect('mi_finanzas:cuentas_lista') 
     else:
         form = CuentaForm()
@@ -319,40 +406,31 @@ def editar_cuenta(request, pk):
     """
     Vista para editar una cuenta existente.
     """
-    # 1. Obtener la cuenta, asegurando que pertenezca al usuario actual (seguridad)
     cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
     
     if request.method == 'POST':
-        # Instanciar el formulario con los datos POST y la instancia de la cuenta
         form = CuentaForm(request.POST, instance=cuenta) 
         if form.is_valid():
             form.save()
             messages.success(request, f"Cuenta '{cuenta.nombre}' actualizada exitosamente.")
-            # Redirigir a la lista de cuentas
             return redirect('mi_finanzas:cuentas_lista') 
     else:
-        # Instanciar el formulario con los datos actuales de la cuenta
         form = CuentaForm(instance=cuenta)
         
     context = {
         'form': form,
         'titulo': f'Editar Cuenta: {cuenta.nombre}',
-        
-        # 🛑 ¡LA LÍNEA CRÍTICA AÑADIDA! 🛑
-        # La plantilla necesita esta variable para construir el enlace de eliminación
         'cuenta': cuenta 
     }
     return render(request, 'mi_finanzas/editar_cuenta.html', context)
 
 
-
 @login_required
-@require_POST  # Solo permite solicitudes POST para mayor seguridad
+@require_POST
 def eliminar_cuenta(request, pk):
     """
     Vista para eliminar una cuenta existente.
     """
-    # 1. Obtener la cuenta y asegurar la propiedad
     cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
     
     # 2. Prevenir la eliminación si tiene transacciones
@@ -366,62 +444,9 @@ def eliminar_cuenta(request, pk):
     return redirect('mi_finanzas:cuentas_lista')
 
 
-@login_required
-def editar_transaccion(request, pk):
-    """
-    Vista para editar una transacción existente.
-    """
-    # 1. Obtener la transacción, asegurando que pertenezca al usuario actual (seguridad)
-    transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
-    
-    # CRÍTICO: Guardar el monto y la cuenta viejos antes de que el formulario los cambie.
-    # Esto es necesario para revertir el cambio de balance en la cuenta anterior.
-    monto_viejo = transaccion.monto
-    cuenta_vieja = transaccion.cuenta
-    
-    if request.method == 'POST':
-        form = TransaccionForm(request.POST, user=request.user, instance=transaccion) 
-        
-        if form.is_valid():
-            # 2. Revertir el balance anterior (suma o resta del monto viejo)
-            # Esto debe hacerse ANTES de guardar la transacción, o en una transacción atómica.
-            
-            with transaction.atomic():
-                # Revertir el efecto de la transacción original en la cuenta vieja
-                if transaccion.tipo == 'INGRESO':
-                    cuenta_vieja.balance -= monto_viejo
-                else: # GASTO
-                    cuenta_vieja.balance += monto_viejo
-                cuenta_vieja.save(update_fields=['balance'])
-                
-                # 3. Guardar la nueva transacción
-                transaccion_nueva = form.save(commit=False)
-                transaccion_nueva.usuario = request.user
-                transaccion_nueva.save()
-                
-                # 4. Aplicar el nuevo efecto a la nueva cuenta
-                cuenta_nueva = transaccion_nueva.cuenta
-                monto_nuevo = transaccion_nueva.monto
-                
-                if transaccion_nueva.tipo == 'INGRESO':
-                    cuenta_nueva.balance += monto_nuevo
-                else: # GASTO
-                    cuenta_nueva.balance -= monto_nuevo
-                cuenta_nueva.save(update_fields=['balance'])
-            
-            messages.success(request, f"Transacción de {transaccion_nueva.tipo} actualizada exitosamente.")
-            return redirect('mi_finanzas:transacciones_lista') 
-            
-    else:
-        # Instanciar el formulario con los datos actuales de la transacción
-        form = TransaccionForm(user=request.user, instance=transaccion)
-        
-    context = {
-        'form': form,
-        'titulo': f'Editar Transacción: {transaccion.descripcion}'
-    }
-    return render(request, 'mi_finanzas/editar_transaccion.html', context)
-
+# =========================================================
+# 4. VISTAS DE PRESUPUESTOS
+# =========================================================
 
 @login_required
 def crear_presupuesto(request):
@@ -429,14 +454,12 @@ def crear_presupuesto(request):
     Vista para crear un nuevo presupuesto mensual.
     """
     if request.method == 'POST':
-        # Nota: Asumiendo que PresupuestoForm fue importado correctamente
         form = PresupuestoForm(request.POST, user=request.user)
         if form.is_valid():
             presupuesto = form.save(commit=False)
             presupuesto.usuario = request.user
             presupuesto.save()
             messages.success(request, "¡Presupuesto creado exitosamente!")
-            # Redirigir al resumen o a una lista de presupuestos si existe
             return redirect('mi_finanzas:resumen_financiero') 
     else:
         form = PresupuestoForm(user=request.user)
@@ -448,6 +471,56 @@ def crear_presupuesto(request):
     return render(request, 'mi_finanzas/crear_presupuesto.html', context)
 
 
+@login_required
+def editar_presupuesto(request, pk):
+    """
+    Vista para editar un presupuesto existente.
+    """
+    presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
+    
+    if request.method == 'POST':
+        form = PresupuestoForm(request.POST, user=request.user, instance=presupuesto)
+        
+        if form.is_valid():
+            presupuesto_editado = form.save(commit=False)
+            presupuesto_editado.usuario = request.user
+            presupuesto_editado.save()
+            messages.success(request, f"Presupuesto para '{presupuesto_editado.categoria.nombre}' actualizado exitosamente.")
+            return redirect('mi_finanzas:resumen_financiero')
+            
+    else:
+        form = PresupuestoForm(user=request.user, instance=presupuesto)
+        
+    context = {
+        'form': form,
+        'titulo': f'Editar Presupuesto: {presupuesto.categoria.nombre}'
+    }
+    return render(request, 'mi_finanzas/editar_presupuesto.html', context)
+
+
+@login_required
+@require_POST
+def eliminar_presupuesto(request, pk):
+    """
+    Vista para eliminar un presupuesto existente.
+    """
+    presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
+    
+    try:
+        nombre_categoria = presupuesto.categoria.nombre
+        presupuesto.delete()
+        
+        messages.success(request, f"El presupuesto para '{nombre_categoria}' ha sido eliminado.")
+        return redirect('mi_finanzas:resumen_financiero')
+        
+    except Exception as e:
+        messages.error(request, f"Error al eliminar el presupuesto: {e}")
+        return redirect('mi_finanzas:resumen_financiero')
+
+
+# =========================================================
+# 5. VISTAS DE REPORTES
+# =========================================================
 
 @login_required
 def reportes_financieros(request):
@@ -456,10 +529,6 @@ def reportes_financieros(request):
     """
     usuario = request.user
     
-    # Lógica de ejemplo: Puedes agregar aquí filtros por fecha, 
-    # categorías o cuentas para generar reportes dinámicos.
-    
-    # 1. Datos para el reporte de gastos por categoría (histórico o por filtro)
     gastos_totales_por_categoria = Transaccion.objects.filter(
         usuario=usuario,
         tipo='GASTO'
@@ -470,111 +539,6 @@ def reportes_financieros(request):
     context = {
         'titulo': 'Reportes y Análisis',
         'gastos_por_categoria': gastos_totales_por_categoria,
-        # Puedes añadir otros datos de reportes aquí
     }
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
-
-
-@login_required
-def editar_presupuesto(request, pk):
-    """
-    Vista para editar un presupuesto existente.
-    """
-    # 1. Obtener el presupuesto, asegurando que pertenezca al usuario
-    presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
-    
-    if request.method == 'POST':
-        # Instanciar el formulario con los datos POST y la instancia existente
-        # Asumiendo que PresupuestoForm fue importado correctamente
-        form = PresupuestoForm(request.POST, user=request.user, instance=presupuesto)
-        
-        if form.is_valid():
-            presupuesto_editado = form.save(commit=False)
-            presupuesto_editado.usuario = request.user # Redundante, pero seguro
-            presupuesto_editado.save()
-            messages.success(request, f"Presupuesto para '{presupuesto_editado.categoria.nombre}' actualizado exitosamente.")
-            return redirect('mi_finanzas:resumen_financiero') # O la lista de presupuestos
-            
-    else:
-        # Instanciar el formulario con los datos actuales
-        form = PresupuestoForm(user=request.user, instance=presupuesto)
-        
-    context = {
-        'form': form,
-        'titulo': f'Editar Presupuesto: {presupuesto.categoria.nombre}'
-    }
-    return render(request, 'mi_finanzas/editar_presupuesto.html', context)
-
-
-
-from django.views.decorators.http import require_POST # Asegúrate de que esta importación esté presente
-
-@login_required
-@require_POST  # Usa require_POST para mayor seguridad al eliminar
-def eliminar_presupuesto(request, pk):
-    """
-    Vista para eliminar un presupuesto existente.
-    """
-    # 1. Obtener el presupuesto y asegurar la propiedad del usuario
-    presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
-    
-    try:
-        # 2. Eliminar el objeto de la base de datos
-        # No se requiere transaction.atomic() ya que no afecta saldos de cuentas
-        nombre_categoria = presupuesto.categoria.nombre # Guardamos el nombre antes de borrar
-        presupuesto.delete()
-        
-        messages.success(request, f"El presupuesto para '{nombre_categoria}' ha sido eliminado.")
-        return redirect('mi_finanzas:resumen_financiero') # Redirigir al panel
-    
-    except Exception as e:
-        messages.error(request, f"Error al eliminar el presupuesto: {e}")
-        return redirect('mi_finanzas:resumen_financiero')
-
-
-
-from django.shortcuts import get_object_or_404, redirect
-from django.contrib import messages
-from django.db import transaction
-from django.views.decorators.http import require_POST
-from django.contrib.auth.decorators import login_required
-# ... (asegúrate de que Transaccion y Cuenta están importados desde .models)
-
-# ... (El código de editar_transaccion va antes)
-
-@login_required
-@require_POST  # Usa require_POST para mayor seguridad al eliminar
-def eliminar_transaccion(request, pk):
-    """
-    Vista para eliminar una transacción y revertir su efecto en la cuenta asociada.
-    """
-    # 1. Obtener la transacción y asegurar la propiedad del usuario
-    transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
-    cuenta = transaccion.cuenta
-    
-    try:
-        # El proceso de eliminación es atómico
-        with transaction.atomic():
-            # 2. Revertir el efecto de la transacción antes de eliminarla
-            if transaccion.tipo == 'INGRESO':
-                # Si era un INGRESO, lo restamos de la cuenta
-                cuenta.balance -= transaccion.monto
-            else: # GASTO
-                # Si era un GASTO, lo sumamos de nuevo a la cuenta
-                cuenta.balance += transaccion.monto
-            
-            # 3. Guardar el nuevo balance de la cuenta
-            cuenta.save(update_fields=['balance'])
-            
-            # 4. Eliminar la transacción
-            transaccion.delete()
-
-        messages.success(request, f"Transacción de '{transaccion.descripcion}' eliminada y balance revertido.")
-        return redirect('mi_finanzas:transacciones_lista')
-
-    except Exception as e:
-        messages.error(request, f"Error al eliminar la transacción: {e}")
-        return redirect('mi_finanzas:transacciones_lista')
-
-# ... (El resto de las funciones sigue después)
 
