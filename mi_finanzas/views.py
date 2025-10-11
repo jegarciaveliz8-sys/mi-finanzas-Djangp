@@ -527,3 +527,50 @@ def eliminar_presupuesto(request, pk):
         messages.error(request, f"Error al eliminar el presupuesto: {e}")
         return redirect('mi_finanzas:resumen_financiero')
 
+
+
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.db import transaction
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+# ... (asegúrate de que Transaccion y Cuenta están importados desde .models)
+
+# ... (El código de editar_transaccion va antes)
+
+@login_required
+@require_POST  # Usa require_POST para mayor seguridad al eliminar
+def eliminar_transaccion(request, pk):
+    """
+    Vista para eliminar una transacción y revertir su efecto en la cuenta asociada.
+    """
+    # 1. Obtener la transacción y asegurar la propiedad del usuario
+    transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
+    cuenta = transaccion.cuenta
+    
+    try:
+        # El proceso de eliminación es atómico
+        with transaction.atomic():
+            # 2. Revertir el efecto de la transacción antes de eliminarla
+            if transaccion.tipo == 'INGRESO':
+                # Si era un INGRESO, lo restamos de la cuenta
+                cuenta.balance -= transaccion.monto
+            else: # GASTO
+                # Si era un GASTO, lo sumamos de nuevo a la cuenta
+                cuenta.balance += transaccion.monto
+            
+            # 3. Guardar el nuevo balance de la cuenta
+            cuenta.save(update_fields=['balance'])
+            
+            # 4. Eliminar la transacción
+            transaccion.delete()
+
+        messages.success(request, f"Transacción de '{transaccion.descripcion}' eliminada y balance revertido.")
+        return redirect('mi_finanzas:transacciones_lista')
+
+    except Exception as e:
+        messages.error(request, f"Error al eliminar la transacción: {e}")
+        return redirect('mi_finanzas:transacciones_lista')
+
+# ... (El resto de las funciones sigue después)
+
