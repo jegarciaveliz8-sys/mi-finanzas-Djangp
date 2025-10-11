@@ -212,6 +212,7 @@ def transferir_monto(request):
                     # Restar y guardar (update_fields garantiza atomicidad)
                     cuenta_origen.balance -= monto
                     cuenta_origen.save(update_fields=['balance']) 
+                     
 
                     # Sumar y guardar (update_fields garantiza atomicidad)
                     cuenta_destino.balance += monto
