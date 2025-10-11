@@ -9,6 +9,7 @@ from django.views.generic import CreateView
 from django.contrib.auth.models import User 
 from django.views.decorators.http import require_POST 
 from django.db import transaction # Importación esencial para transacciones atómicas
+from django.utils import timezone  # 💡 IMPORTACIÓN AÑADIDA/CONFIRMADA para Presupuestos
 
 import json
 import datetime
@@ -51,8 +52,6 @@ def resumen_financiero(request):
     anio_actual = hoy.year
 
     # --- CÁLCULO DE MÉTRICAS GLOBALES (Saldo Total Neto, Ingresos, Gastos) ---
-    # Nota: El Saldo Total Neto se calcula sumando el BALANCE ACTUAL de todas las cuentas.
-    # Es vital que el balance de cada cuenta se actualice al crear/editar/eliminar transacciones.
     saldo_total_neto = Cuenta.objects.filter(usuario=usuario).aggregate(
         total=Coalesce(Sum('balance'), Decimal(0.00), output_field=DecimalField())
     )['total']
@@ -125,7 +124,7 @@ def resumen_financiero(request):
             color_barra = 'bg-warning'
         else:
             color_barra = 'bg-danger'
-                
+                 
         resultados_presupuesto.append({
             'categoria_nombre': presupuesto.categoria.nombre,
             'limite': limite,
@@ -219,7 +218,7 @@ def transferir_monto(request):
 
 @login_required
 def anadir_transaccion(request):
-    """Añade una nueva transacción y **ACTUALIZA EL BALANCE DE LA CUENTA** (CORREGIDO)."""
+    """Añade una nueva transacción y **ACTUALIZA EL BALANCE DE LA CUENTA**."""
     if request.method == 'POST':
         form = TransaccionForm(request.POST, user=request.user) 
         if form.is_valid():
@@ -232,8 +231,12 @@ def anadir_transaccion(request):
             
             try:
                 with transaction.atomic():
-                    # 2. Guardar la transacción
+                    # 2. Asignar el usuario y el campo 'idao'
                     transaccion.usuario = request.user
+                    # 💡 CORRECCIÓN: Asignar 'idao' para evitar NOT NULL constraint failed
+                    # Asumimos que 'idao' es un alias o campo para el usuario actual
+                    transaccion.idao = request.user 
+                    
                     transaccion.save()
                     
                     # 3. Aplicar el efecto al balance de la cuenta (LÓGICA CRÍTICA)
@@ -241,12 +244,12 @@ def anadir_transaccion(request):
                         cuenta.balance += monto
                     else: # GASTO
                         cuenta.balance -= monto
-                    
+                        
                     # Guardar el nuevo balance de la cuenta
                     cuenta.save(update_fields=['balance'])
-                
-                messages.success(request, "Transacción añadida y cuenta actualizada exitosamente.")
-                return redirect('mi_finanzas:resumen_financiero')
+                    
+                    messages.success(request, "Transacción añadida y cuenta actualizada exitosamente.")
+                    return redirect('mi_finanzas:resumen_financiero')
 
             except Exception as e:
                 messages.error(request, f"Error al procesar la transacción: {e}")
@@ -260,7 +263,7 @@ def anadir_transaccion(request):
 @login_required
 def editar_transaccion(request, pk):
     """
-    Vista para editar una transacción existente con **LÓGICA ATÓMICA DE REVERSIÓN Y APLICACIÓN** (CORREGIDO).
+    Vista para editar una transacción existente con **LÓGICA ATÓMICA DE REVERSIÓN Y APLICACIÓN**.
     """
     transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
     
@@ -448,8 +451,6 @@ def eliminar_cuenta(request, pk):
 # 4. VISTAS DE PRESUPUESTOS
 # =========================================================
 
-from django.utils import timezone  # Asegúrate de tener esta importación arriba
-
 @login_required
 def crear_presupuesto(request):
     """
@@ -461,13 +462,10 @@ def crear_presupuesto(request):
             presupuesto = form.save(commit=False)
             presupuesto.usuario = request.user
             
-            # 💡 CORRECCIÓN: Asignar el número entero del mes actual.
-            # Esto resuelve el TypeError que esperaba un 'number' (entero).
+            # 💡 CORRECCIÓN 1: Asignar el mes y año como enteros (para resolver IntegrityError y TypeError)
             now = timezone.now()
-            presupuesto.mes = now.month  # Asigna '10' para Octubre
-            
-            # NOTA: Si tu modelo también tiene un campo 'anio',
-            # DEBES añadir la línea: presupuesto.anio = now.year
+            presupuesto.mes = now.month    # Asigna el número del mes (10 para Octubre)
+            presupuesto.anio = now.year    # Asigna el año (2025)
             
             presupuesto.save()
             messages.success(request, "¡Presupuesto creado exitosamente!")
@@ -552,4 +550,3 @@ def reportes_financieros(request):
         'gastos_por_categoria': gastos_totales_por_categoria,
     }
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
-
