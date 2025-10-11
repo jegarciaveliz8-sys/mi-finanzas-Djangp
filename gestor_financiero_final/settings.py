@@ -20,8 +20,14 @@ SECRET_KEY = 'django-insecure-33^d*8(2f!7&y(f8k5g*s!0f2j00+c2w2m1f8$20e=g0k0a0p'
 DEBUG = True
 
 # ⚠️ ALLOWED_HOSTS: Añadir tu dominio o IP del servidor en producción.
-# Corregido: Añadimos localhost y 127.0.0.1 para acceso local
-ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.39'] 
+ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.39', 'localhost'] 
+
+# 💡 CONFIGURACIÓN PARA DJANGO DEBUG TOOLBAR
+# Estas IPs tienen permiso para ver la barra de depuración.
+INTERNAL_IPS = [
+    "127.0.0.1", 
+    "192.168.1.39",
+]
 
 
 # ----------------------------------------------------------------------
@@ -36,6 +42,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    
+    # 💡 HERRAMIENTA DE DEPURACIÓN
+    'debug_toolbar', 
+    
     'crispy_bootstrap5',
     # Herramientas de terceros
     'widget_tweaks',
@@ -53,6 +63,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    
+    # 💡 MIDDLEWARE DE DEPURACIÓN (Debe estar aquí, después de SecurityMiddleware)
+    'debug_toolbar.middleware.DebugToolbarMiddleware', 
+    
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

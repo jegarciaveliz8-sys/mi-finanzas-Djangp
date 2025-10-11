@@ -7,6 +7,9 @@ from django.contrib.auth import urls as auth_urls
 from mi_finanzas.views import RegistroUsuario 
 
 urlpatterns = [
+    # 💡 RUTA DE DEPURACIÓN (CRÍTICA para la Debug Toolbar)
+    path("__debug__/", include("debug_toolbar.urls")), 
+    
     # Ruta de Administración
     path('admin/', admin.site.urls),
 
