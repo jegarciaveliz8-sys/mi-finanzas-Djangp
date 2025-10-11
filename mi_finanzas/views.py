@@ -261,60 +261,74 @@ def anadir_transaccion(request):
     return render(request, 'mi_finanzas/anadir_transaccion.html', {'form': form})
 
 
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.db import transaction # Necesitas importar esto
+from .models import Transaccion, Cuenta # Asegúrate de importar Cuenta
+from .forms import TransaccionForm # Asumiendo que has creado este formulario
+
 @login_required
 def editar_transaccion(request, pk):
     """
-    Vista para editar una transacción existente con **LÓGICA ATÓMICA DE REVERSIÓN Y APLICACIÓN**.
+    Vista para editar una transacción existente con LÓGICA ATÓMICA.
+    Asegura que los saldos de las cuentas se actualicen correctamente.
     """
+    # 1. Recuperar la transacción (Filtro de Seguridad)
     transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
     
-    # 1. CRÍTICO: Guardar el monto, tipo y cuenta viejos ANTES de que el formulario los cambie.
+    # 2. CRÍTICO: Guardar los valores viejos ANTES de que el formulario los reemplace
     monto_viejo = transaccion.monto
     tipo_viejo = transaccion.tipo 
     cuenta_vieja = transaccion.cuenta
-    
+
     if request.method == 'POST':
-        form = TransaccionForm(request.POST, user=request.user, instance=transaccion) 
+        form = TransaccionForm(request.POST, instance=transaccion)
         
         if form.is_valid():
             
             with transaction.atomic():
-                # 2. Revertir el efecto de la transacción original en la cuenta vieja
-                if tipo_viejo == 'INGRESO':
-                    cuenta_vieja.balance -= monto_viejo
-                else: # GASTO
-                    cuenta_vieja.balance += monto_viejo
-                cuenta_vieja.save(update_fields=['balance'])
+                # --- FASE 1: REVERTIR EL EFECTO VIEJO ---
                 
-                # 3. Guardar la nueva transacción
-                transaccion_nueva = form.save(commit=False)
-                transaccion_nueva.usuario = request.user
-                transaccion_nueva.save()
-                
-                # 4. Aplicar el nuevo efecto a la nueva cuenta
-                cuenta_nueva = transaccion_nueva.cuenta
-                monto_nuevo = transaccion_nueva.monto
-                tipo_nuevo = transaccion_nueva.tipo
+                # Revertir el saldo de la cuenta vieja
+                # Si era un Ingreso, revertimos restando. Si era Gasto, revertimos sumando.
+                if tipo_viejo == 'Ingreso':
+                    cuenta_vieja.saldo -= monto_viejo
+                else: # Gasto
+                    cuenta_vieja.saldo += monto_viejo
+                cuenta_vieja.save()
 
-                if tipo_nuevo == 'INGRESO':
-                    cuenta_nueva.balance += monto_nuevo
-                else: # GASTO
-                    cuenta_nueva.balance -= monto_nuevo
+                # --- FASE 2: APLICAR EL NUEVO EFECTO ---
                 
-                # Guardar el nuevo balance
-                cuenta_nueva.save(update_fields=['balance'])
-            
-            messages.success(request, f"Transacción de {transaccion_nueva.tipo} actualizada exitosamente.")
-            return redirect('mi_finanzas:transacciones_lista') 
+                # Guardar la transacción actualizada (con commit=False)
+                nueva_transaccion = form.save(commit=False)
+                
+                # Obtener la nueva cuenta (podría ser la misma o una nueva)
+                cuenta_nueva = nueva_transaccion.cuenta 
+                
+                # Aplicar el nuevo monto al saldo de la cuenta_nueva
+                if nueva_transaccion.tipo == 'Ingreso':
+                    cuenta_nueva.saldo += nueva_transaccion.monto
+                else: # Gasto
+                    cuenta_nueva.saldo -= nueva_transaccion.monto
+                
+                # Guardar la cuenta (ya actualizada) y la transacción
+                cuenta_nueva.save()
+                nueva_transaccion.save()
+                
+            # Si todo sale bien (bloque atomic), redirigir
+            return redirect('mi_finanzas:transacciones_lista')
             
     else:
-        form = TransaccionForm(user=request.user, instance=transaccion)
+        # Si es GET, inicializar el formulario con los datos existentes
+        form = TransaccionForm(instance=transaccion) 
         
     context = {
         'form': form,
-        'titulo': f'Editar Transacción: {transaccion.descripcion}'
+        'transaccion': transaccion,
+        'titulo': f'Editar Transacción #{pk}'
     }
     return render(request, 'mi_finanzas/editar_transaccion.html', context)
+
 
 
 @login_required
