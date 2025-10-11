@@ -448,6 +448,8 @@ def eliminar_cuenta(request, pk):
 # 4. VISTAS DE PRESUPUESTOS
 # =========================================================
 
+from django.utils import timezone  # 💡 IMPORTAR para trabajar con fechas y horas
+
 @login_required
 def crear_presupuesto(request):
     """
@@ -458,6 +460,12 @@ def crear_presupuesto(request):
         if form.is_valid():
             presupuesto = form.save(commit=False)
             presupuesto.usuario = request.user
+            
+            # 💡 SOLUCIÓN AÑADIDA: Asignar el campo 'mes'
+            # Asignamos el primer día del mes actual (Octubre 2025)
+            now = timezone.now()
+            presupuesto.mes = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            
             presupuesto.save()
             messages.success(request, "¡Presupuesto creado exitosamente!")
             return redirect('mi_finanzas:resumen_financiero') 
@@ -469,6 +477,7 @@ def crear_presupuesto(request):
         'titulo': 'Crear Nuevo Presupuesto'
     }
     return render(request, 'mi_finanzas/crear_presupuesto.html', context)
+
 
 
 @login_required
