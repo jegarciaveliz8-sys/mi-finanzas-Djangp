@@ -1,34 +1,72 @@
-{% extends 'base_admin.html' %}
-{% load static %}
+{% extends "mi_finanzas/base.html" %} 
 
 {% block content %}
-<div class="container-fluid pt-4">
-    <div class="row">
-        <div class="col-12">
-            <h1 class="h3 mb-4 text-gray-800">{{ titulo }}</h1>
-            <p class="text-secondary">Aquí se mostrarán los gráficos y reportes.</p>
+<div class="container mt-5">
+    <h2 class="mb-4">{{ titulo }}</h2>
+
+    {% if not gastos_por_categoria %}
+        <div class="alert alert-info">
+            No hay suficientes datos de transacciones de GASTO para generar reportes en este período.
+        </div>
+    {% endif %}
+
+    <div class="card mb-4 shadow-sm">
+        <div class="card-header bg-dark text-white">
+            Resumen de Flujo de Caja Mensual
+        </div>
+        <div class="card-body">
+            <div class="row text-center">
+                <div class="col-md-4">
+                    <h5 class="text-success">Ingresos</h5>
+                    <h3>${{ resumen_mensual.ingresos|floatformat:2 }}</h3>
+                </div>
+                <div class="col-md-4">
+                    <h5 class="text-danger">Gastos</h5>
+                    <h3>${{ resumen_mensual.gastos|floatformat:2 }}</h3>
+                </div>
+                <div class="col-md-4">
+                    <h5 class="text-primary">Flujo Neto</h5>
+                    <h3 class="{% if resumen_mensual.neto >= 0 %}text-success{% else %}text-danger{% endif %}">${{ resumen_mensual.neto|floatformat:2 }}</h3>
+                </div>
+            </div>
         </div>
     </div>
-
+    
     <div class="row">
-        <div class="col-xl-6 col-lg-6 mb-4">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Flujo de Caja Mensual (Ingresos vs. Gastos)</h6>
+        
+        <div class="col-md-6">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    Distribución de Gastos por Categoría
                 </div>
                 <div class="card-body">
-                    <canvas id="flujoCajaChart"></canvas>
+                    <canvas id="gastosChart"></canvas>
                 </div>
             </div>
         </div>
 
-        <div class="col-xl-6 col-lg-6 mb-4">
-            <div class="card shadow mb-4">
-                <div class="card-header py-3">
-                    <h6 class="m-0 font-weight-bold text-primary">Distribución de Gastos por Categoría</h6>
+        <div class="col-md-6">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header">
+                    Top Categorías de Gasto
                 </div>
                 <div class="card-body">
-                    <canvas id="distribucionGastosChart"></canvas>
+                    <table class="table table-striped table-sm">
+                        <thead>
+                            <tr>
+                                <th>Categoría</th>
+                                <th>Monto Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for gasto in gastos_por_categoria %}
+                            <tr>
+                                <td>{{ gasto.categoria__nombre|default:"Sin Categoría" }}</td>
+                                <td>${{ gasto.total|floatformat:2 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -36,73 +74,36 @@
 </div>
 {% endblock content %}
 
-{% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
-
+{% block extra_js %}
 <script>
-    // -----------------------------------------------------
-    // 1. Gráfico de Flujo de Caja Mensual (Ingresos vs. Gastos)
-    // -----------------------------------------------------
-    const flujoCajaData = JSON.parse('{{ flujo_caja_json|safe }}');
-    const ctxFlujoCaja = document.getElementById('flujoCajaChart').getContext('2d');
-
-    const flujoCajaChart = new Chart(ctxFlujoCaja, {
-        type: 'bar',
-        data: {
-            labels: flujoCajaData.labels,
-            datasets: [
-                {
-                    label: 'Ingresos',
-                    data: flujoCajaData.ingresos,
-                    backgroundColor: 'rgba(75, 192, 192, 0.8)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
-                    borderWidth: 1
-                },
-                {
-                    label: 'Gastos',
-                    data: flujoCajaData.gastos,
-                    backgroundColor: 'rgba(255, 99, 132, 0.8)',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    borderWidth: 1
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-</script>
-{% endblock extra_scripts %}
-
-{% block extra_scripts %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
-
-<script>
-    // ... (El código del Gráfico de Flujo de Caja Mensual está aquí) ...
+document.addEventListener('DOMContentLoaded', function() {
+    // 1. Preparar datos para el gráfico
+    // Los datos del QuerySet están en la variable 'gastos_por_categoria'
     
-    // -----------------------------------------------------
-    // 2. Gráfico de Distribución de Gastos por Categoría
-    // -----------------------------------------------------
-    const distribucionGastosData = JSON.parse('{{ distribucion_gastos_json|safe }}');
-    const ctxDistribucion = document.getElementById('distribucionGastosChart').getContext('2d');
+    // Convertir el QuerySet a formato JSON (se necesita en la vista o en una API, 
+    // pero para este ejemplo, convertiremos el objeto Python a arrays JS)
+    
+    const gastosData = JSON.parse('{{ gastos_por_categoria|safe|escapejs }}');
+    
+    const labels = gastosData.map(item => item.categoria__nombre || 'Sin Categoría');
+    const data = gastosData.map(item => parseFloat(item.total));
+    
+    // Colores aleatorios para el gráfico
+    const backgroundColors = data.map(() => `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, ${Math.floor(Math.random() * 255)}, 0.7)`);
+    const borderColors = backgroundColors.map(color => color.replace('0.7', '1'));
 
-    const distribucionGastosChart = new Chart(ctxDistribucion, {
-        type: 'pie',
+    // 2. Configuración del gráfico
+    const ctx = document.getElementById('gastosChart').getContext('2d');
+    
+    new Chart(ctx, {
+        type: 'doughnut', // Gráfico circular de anillo
         data: {
-            labels: distribucionGastosData.labels,
+            labels: labels,
             datasets: [{
-                data: distribucionGastosData.montos,
-                backgroundColor: [ // Define un color diferente para cada sector
-                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#A0522D', '#7FFF00'
-                ],
-                hoverBackgroundColor: [
-                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#A0522D', '#7FFF00'
-                ]
+                data: data,
+                backgroundColor: backgroundColors,
+                borderColor: borderColors,
+                borderWidth: 1
             }]
         },
         options: {
@@ -112,11 +113,11 @@
                     position: 'top',
                 },
                 title: {
-                    display: false,
+                    display: false
                 }
             }
         }
     });
+});
 </script>
-{% endblock extra_scripts %}
-
+{% endblock extra_js %}

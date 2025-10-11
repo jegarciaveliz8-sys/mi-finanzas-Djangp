@@ -1,6 +1,6 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum, DecimalField
+from django.db.models import Sum, DecimalField, F
 from django.db.models.functions import Coalesce
 from django.contrib import messages
 from django.http import JsonResponse, HttpResponse
@@ -8,19 +8,19 @@ from django.urls import reverse_lazy
 from django.views.generic import CreateView 
 from django.contrib.auth.models import User 
 from django.views.decorators.http import require_POST 
-from django.db import transaction # Importación esencial para transacciones atómicas
-from django.utils import timezone  # Importación para manejar fechas y tiempos
+from django.db import transaction, IntegrityError # Importaciones esenciales
+from django.utils import timezone 
 
 import json
 import datetime
 from decimal import Decimal
 
-# Importaciones Locales CRÍTICAS: Aseguran que las vistas y formularios funcionen
+# Importaciones Locales CRÍTICAS:
 from .models import Cuenta, Transaccion, Categoria, Presupuesto
 from .forms import (
     RegistroUsuarioForm, 
     TransaccionForm, 
-    TransferenciaForm,
+    TransferenciaForm, # ¡Necesitas este formulario implementado!
     CuentaForm, 
     PresupuestoForm 
 )
@@ -51,8 +51,7 @@ def resumen_financiero(request):
     mes_actual = hoy.month
     anio_actual = hoy.year
     
-    # 💡 OPTIMIZACIÓN 1: QuerySet Base para el mes actual
-    # Esto evita repetir filtros de usuario, mes y año en cada consulta (Elimina consultas repetidas)
+    # QuerySet Base para el mes actual
     transacciones_mes_base = Transaccion.objects.filter(
         usuario=usuario, 
         fecha__month=mes_actual, 
@@ -77,16 +76,16 @@ def resumen_financiero(request):
     cuentas = Cuenta.objects.filter(usuario=usuario).order_by('nombre')
     
     # --- DATOS PARA GRÁFICO DE GASTOS ---
-    gastos_por_categoria = transacciones_mes_base.filter(
+    gastos_por_categoria_qs = transacciones_mes_base.filter(
         tipo='GASTO',
     ).values('categoria__nombre').annotate(
         total=Coalesce(Sum('monto'), Decimal(0.00))
     ).order_by('-total')
 
     chart_labels = [gasto['categoria__nombre'] if gasto['categoria__nombre'] else 'Sin Categoría' 
-                     for gasto in gastos_por_categoria if gasto['total'] > 0]
+                     for gasto in gastos_por_categoria_qs if gasto['total'] > 0]
     chart_data_values = [float(gasto['total']) 
-                         for gasto in gastos_por_categoria if gasto['total'] > 0]
+                         for gasto in gastos_por_categoria_qs if gasto['total'] > 0]
 
     chart_data = {
         'labels': chart_labels,
@@ -95,12 +94,11 @@ def resumen_financiero(request):
     chart_data_json = json.dumps(chart_data)
 
     # --- LÓGICA DE PRESUPUESTOS (N+1 Resuelto) ---
-    # 💡 OPTIMIZACIÓN 2: Usamos select_related('categoria') para cargar la categoría
     presupuestos = Presupuesto.objects.filter(
         usuario=usuario, 
         mes=mes_actual, 
         anio=anio_actual
-    ).select_related('categoria') # ⬅️ CLAVE: Elimina consultas por cada presupuesto
+    ).select_related('categoria') 
     
     resultados_presupuesto = []
     
@@ -130,23 +128,23 @@ def resumen_financiero(request):
             'gastado': gasto_real,
             'restante': restante,
             'porcentaje': porcentaje,
-            'color_barra': color_barra
+            'color_barra': color_barra,
+            'pk': presupuesto.pk
         })
 
     # --- ACTIVIDAD RECIENTE (N+1 Resuelto) ---
-    # 💡 OPTIMIZACIÓN 3: select_related para cargar cuenta y categoría al instante
     ultimas_transacciones = Transaccion.objects.filter(usuario=usuario).select_related(
         'cuenta', 'categoria'
-    ).order_by('-fecha')[:5] # ⬅️ CLAVE: Elimina consultas por cada transacción
+    ).order_by('-fecha')[:5] 
     
     # --- LÓGICA DEL MENSAJE DE SALUD FINANCIERA ---
-    if float(saldo_total_neto) > 500: 
+    if saldo_total_neto > 500: 
         estado_financiero = {
             'tipo': 'alert-success',
             'icono': 'fas fa-thumbs-up',
             'mensaje': '¡Excelente! Tu salud financiera es fuerte. Sigue así.'
         }
-    elif float(saldo_total_neto) >= 0:
+    elif saldo_total_neto >= 0:
         estado_financiero = {
             'tipo': 'alert-warning',
             'icono': 'fas fa-exclamation-triangle',
@@ -167,7 +165,7 @@ def resumen_financiero(request):
         'mes_actual': hoy.strftime('%B'),
         'anio_actual': anio_actual,
         'cuentas': cuentas,
-        'gastos_por_categoria': gastos_por_categoria,
+        'gastos_por_categoria': gastos_por_categoria_qs,
         'chart_data': chart_data_json,
         'resultados_presupuesto': resultados_presupuesto,
         'ultimas_transacciones': ultimas_transacciones,
@@ -184,31 +182,69 @@ def resumen_financiero(request):
 @login_required
 def transferir_monto(request):
     """Define la lógica para la transferencia de montos (con atomicidad)."""
+    # 💡 CORRECCIÓN CRÍTICA: Debes pasar el usuario al formulario para filtrar las cuentas
     if request.method == 'POST':
-        form = TransferenciaForm(request.POST) 
+        form = TransferenciaForm(request.POST, user=request.user) 
         
         if form.is_valid():
             monto = form.cleaned_data['monto']
             cuenta_origen = form.cleaned_data['cuenta_origen']
             cuenta_destino = form.cleaned_data['cuenta_destino']
 
+            # CRÍTICO: No se puede transferir de una cuenta a sí misma
+            if cuenta_origen.pk == cuenta_destino.pk:
+                messages.error(request, "No puedes transferir fondos a la misma cuenta.")
+                return redirect('mi_finanzas:transferir_monto')
+            
+            # CRÍTICO: No se puede transferir si el saldo es insuficiente (opcional, pero buena práctica)
+            if cuenta_origen.balance < monto:
+                 messages.error(request, "Saldo insuficiente en la cuenta de origen.")
+                 return redirect('mi_finanzas:transferir_monto')
+
             try:
                 with transaction.atomic():
-                    # Restar y guardar (update_fields garantiza atomicidad)
-                    cuenta_origen.balance -= monto
-                    cuenta_origen.save(update_fields=['balance']) 
+                    # 1. ACTUALIZAR SALDOS DE CUENTAS
+                    # Restar y guardar (usando F() para evitar condiciones de carrera)
+                    Cuenta.objects.filter(pk=cuenta_origen.pk).update(balance=F('balance') - monto)
                     
-                    # Sumar y guardar (update_fields garantiza atomicidad)
-                    cuenta_destino.balance += monto
-                    cuenta_destino.save(update_fields=['balance']) 
-                 
+                    # Sumar y guardar
+                    Cuenta.objects.filter(pk=cuenta_destino.pk).update(balance=F('balance') + monto)
+                    
+                    # 2. CREAR TRANSACCIONES DE REGISTRO
+                    
+                    # Transacción de Gasto (Salida de Origen)
+                    Transaccion.objects.create(
+                        usuario=request.user,
+                        cuenta=cuenta_origen,
+                        monto=monto,
+                        tipo='GASTO',
+                        fecha=datetime.date.today(),
+                        descripcion=f"Transferencia Enviada a {cuenta_destino.nombre}",
+                        # La categoría puede ser una categoría especial "Transferencia Salida"
+                        categoria=Categoria.objects.get_or_create(nombre='Transferencia Salida', usuario=request.user)[0] 
+                    )
+                    
+                    # Transacción de Ingreso (Entrada a Destino)
+                    Transaccion.objects.create(
+                        usuario=request.user,
+                        cuenta=cuenta_destino,
+                        monto=monto,
+                        tipo='INGRESO',
+                        fecha=datetime.date.today(),
+                        descripcion=f"Transferencia Recibida de {cuenta_origen.nombre}",
+                        # La categoría puede ser una categoría especial "Transferencia Entrada"
+                        categoria=Categoria.objects.get_or_create(nombre='Transferencia Entrada', usuario=request.user)[0]
+                    )
+
                 messages.success(request, f"¡Transferencia de ${monto:.2f} realizada con éxito!")
                 return redirect('mi_finanzas:resumen_financiero') 
 
             except Exception as e:
                 messages.error(request, f"Error al procesar la transferencia: {e}")
+                
     else:
-        form = TransferenciaForm()
+        # CRÍTICO: Debes pasar el usuario al formulario para filtrar las cuentas
+        form = TransferenciaForm(user=request.user) 
         
     context = {
         'titulo': 'Transferir Monto',
@@ -225,7 +261,6 @@ def anadir_transaccion(request):
         form = TransaccionForm(request.POST, user=request.user) 
         if form.is_valid():
             
-            # 1. Obtener los datos necesarios antes de guardar
             transaccion = form.save(commit=False)
             cuenta = transaccion.cuenta
             monto = transaccion.monto
@@ -233,22 +268,17 @@ def anadir_transaccion(request):
             
             try:
                 with transaction.atomic():
-                    # 2. Asignar el usuario y el campo 'idao'
                     transaccion.usuario = request.user
-                    # 💡 CORRECCIÓN (Mantenida): Asignar 'idao' si es necesario por el modelo
-                    transaccion.idao = request.user 
+                    # transaccion.idao = request.user # Corregido: 'idao' no existe en el modelo Transaccion
                     
                     transaccion.save()
                     
-                    # 3. Aplicar el efecto al balance de la cuenta (LÓGICA CRÍTICA)
+                    # Aplicar el efecto al balance de la cuenta
                     if tipo == 'INGRESO':
-                        cuenta.balance += monto
+                        Cuenta.objects.filter(pk=cuenta.pk).update(balance=F('balance') + monto)
                     else: # GASTO
-                        cuenta.balance -= monto
+                        Cuenta.objects.filter(pk=cuenta.pk).update(balance=F('balance') - monto)
                         
-                    # Guardar el nuevo balance de la cuenta
-                    cuenta.save(update_fields=['balance'])
-                    
                     messages.success(request, "Transacción añadida y cuenta actualizada exitosamente.")
                     return redirect('mi_finanzas:resumen_financiero')
 
@@ -261,66 +291,56 @@ def anadir_transaccion(request):
     return render(request, 'mi_finanzas/anadir_transaccion.html', {'form': form})
 
 
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.db import transaction # Necesitas importar esto
-from .models import Transaccion, Cuenta # Asegúrate de importar Cuenta
-from .forms import TransaccionForm # Asumiendo que has creado este formulario
-
 @login_required
 def editar_transaccion(request, pk):
     """
     Vista para editar una transacción existente con LÓGICA ATÓMICA.
     Asegura que los saldos de las cuentas se actualicen correctamente.
     """
-    # 1. Recuperar la transacción (Filtro de Seguridad)
     transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
     
-    # 2. CRÍTICO: Guardar los valores viejos ANTES de que el formulario los reemplace
+    # CRÍTICO: Guardar los valores viejos ANTES de que el formulario los reemplace
     monto_viejo = transaccion.monto
     tipo_viejo = transaccion.tipo 
     cuenta_vieja = transaccion.cuenta
 
     if request.method == 'POST':
-        form = TransaccionForm(request.POST, instance=transaccion)
+        # 💡 MEJORA: Pasar el usuario al formulario para filtrar categorías/cuentas
+        form = TransaccionForm(request.POST, instance=transaccion, user=request.user) 
         
         if form.is_valid():
             
             with transaction.atomic():
                 # --- FASE 1: REVERTIR EL EFECTO VIEJO ---
                 
-                # Revertir el saldo de la cuenta vieja
-                # Si era un Ingreso, revertimos restando. Si era Gasto, revertimos sumando.
-                if tipo_viejo == 'Ingreso':
-                    cuenta_vieja.saldo -= monto_viejo
-                else: # Gasto
-                    cuenta_vieja.saldo += monto_viejo
-                cuenta_vieja.save()
+                # Revertir el saldo de la cuenta vieja (usando F() para atomicidad)
+                if tipo_viejo == 'INGRESO':
+                    Cuenta.objects.filter(pk=cuenta_vieja.pk).update(balance=F('balance') - monto_viejo)
+                else: # GASTO
+                    Cuenta.objects.filter(pk=cuenta_vieja.pk).update(balance=F('balance') + monto_viejo)
+                
 
                 # --- FASE 2: APLICAR EL NUEVO EFECTO ---
                 
                 # Guardar la transacción actualizada (con commit=False)
                 nueva_transaccion = form.save(commit=False)
+                nueva_transaccion.save() # Guardar los cambios de la transacción
                 
                 # Obtener la nueva cuenta (podría ser la misma o una nueva)
                 cuenta_nueva = nueva_transaccion.cuenta 
                 
                 # Aplicar el nuevo monto al saldo de la cuenta_nueva
-                if nueva_transaccion.tipo == 'Ingreso':
-                    cuenta_nueva.saldo += nueva_transaccion.monto
-                else: # Gasto
-                    cuenta_nueva.saldo -= nueva_transaccion.monto
+                if nueva_transaccion.tipo == 'INGRESO':
+                    Cuenta.objects.filter(pk=cuenta_nueva.pk).update(balance=F('balance') + nueva_transaccion.monto)
+                else: # GASTO
+                    Cuenta.objects.filter(pk=cuenta_nueva.pk).update(balance=F('balance') - nueva_transaccion.monto)
                 
-                # Guardar la cuenta (ya actualizada) y la transacción
-                cuenta_nueva.save()
-                nueva_transaccion.save()
-                
-            # Si todo sale bien (bloque atomic), redirigir
-            return redirect('mi_finanzas:transacciones_lista')
+                messages.success(request, "Transacción editada y balances actualizados exitosamente.")
+                return redirect('mi_finanzas:transacciones_lista')
             
     else:
         # Si es GET, inicializar el formulario con los datos existentes
-        form = TransaccionForm(instance=transaccion) 
+        form = TransaccionForm(instance=transaccion, user=request.user) 
         
     context = {
         'form': form,
@@ -328,7 +348,6 @@ def editar_transaccion(request, pk):
         'titulo': f'Editar Transacción #{pk}'
     }
     return render(request, 'mi_finanzas/editar_transaccion.html', context)
-
 
 
 @login_required
@@ -345,14 +364,11 @@ def eliminar_transaccion(request, pk):
         with transaction.atomic():
             # 1. Revertir el efecto de la transacción antes de eliminarla
             if transaccion.tipo == 'INGRESO':
-                cuenta.balance -= transaccion.monto
+                Cuenta.objects.filter(pk=cuenta.pk).update(balance=F('balance') - transaccion.monto)
             else: # GASTO
-                cuenta.balance += transaccion.monto
-             
-            # 2. Guardar el nuevo balance de la cuenta
-            cuenta.save(update_fields=['balance'])
-             
-            # 3. Eliminar la transacción
+                Cuenta.objects.filter(pk=cuenta.pk).update(balance=F('balance') + transaccion.monto)
+            
+            # 2. Eliminar la transacción
             transaccion.delete()
 
         messages.success(request, f"Transacción de '{transaccion.descripcion}' eliminada y balance revertido.")
@@ -368,7 +384,6 @@ def transacciones_lista(request):
     """
     Muestra una lista de todas las transacciones del usuario.
     """
-    # 💡 OPTIMIZACIÓN: Añadir select_related para evitar N+1 al listar
     transacciones = Transaccion.objects.filter(usuario=request.user).select_related(
         'cuenta', 'categoria'
     ).order_by('-fecha')
@@ -406,11 +421,17 @@ def anadir_cuenta(request):
     if request.method == 'POST':
         form = CuentaForm(request.POST) 
         if form.is_valid():
-            cuenta = form.save(commit=False)
-            cuenta.usuario = request.user
-            cuenta.save()
-            messages.success(request, "Cuenta añadida exitosamente.")
-            return redirect('mi_finanzas:cuentas_lista') 
+            try:
+                cuenta = form.save(commit=False)
+                cuenta.usuario = request.user
+                cuenta.save()
+                messages.success(request, "Cuenta añadida exitosamente.")
+                return redirect('mi_finanzas:cuentas_lista') 
+            except IntegrityError:
+                messages.error(request, "Ya tienes una cuenta con ese nombre. Los nombres deben ser únicos.")
+            except Exception as e:
+                messages.error(request, f"Error al guardar la cuenta: {e}")
+
     else:
         form = CuentaForm()
         
@@ -431,9 +452,15 @@ def editar_cuenta(request, pk):
     if request.method == 'POST':
         form = CuentaForm(request.POST, instance=cuenta) 
         if form.is_valid():
-            form.save()
-            messages.success(request, f"Cuenta '{cuenta.nombre}' actualizada exitosamente.")
-            return redirect('mi_finanzas:cuentas_lista') 
+            try:
+                form.save()
+                messages.success(request, f"Cuenta '{cuenta.nombre}' actualizada exitosamente.")
+                return redirect('mi_finanzas:cuentas_lista') 
+            except IntegrityError:
+                messages.error(request, "Ya tienes una cuenta con ese nombre. Los nombres deben ser únicos.")
+            except Exception as e:
+                messages.error(request, f"Error al guardar la cuenta: {e}")
+
     else:
         form = CuentaForm(instance=cuenta)
         
@@ -453,12 +480,12 @@ def eliminar_cuenta(request, pk):
     """
     cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
     
-    # 2. Prevenir la eliminación si tiene transacciones
+    # Prevenir la eliminación si tiene transacciones
     if Transaccion.objects.filter(cuenta=cuenta).exists():
         messages.error(request, f"No se puede eliminar la cuenta '{cuenta.nombre}' porque tiene transacciones asociadas. Elimina las transacciones primero.")
         return redirect('mi_finanzas:cuentas_lista')
 
-    # 3. Eliminar la cuenta
+    # Eliminar la cuenta
     cuenta.delete()
     messages.success(request, f"Cuenta '{cuenta.nombre}' eliminada exitosamente.")
     return redirect('mi_finanzas:cuentas_lista')
@@ -471,25 +498,36 @@ def eliminar_cuenta(request, pk):
 @login_required
 def crear_presupuesto(request):
     """
-    Vista para crear un nuevo presupuesto mensual.
+    Vista para crear un nuevo presupuesto, asegurando que no haya duplicados 
+    por usuario, categoría, mes y año.
     """
     if request.method == 'POST':
-        form = PresupuestoForm(request.POST, user=request.user)
+        # 💡 CORRECCIÓN CRÍTICA: Cambiado user=request.user a request=request
+        form = PresupuestoForm(request.POST, request=request)
+        
         if form.is_valid():
-            presupuesto = form.save(commit=False)
-            presupuesto.usuario = request.user
-             
-            # 💡 CORRECCIÓN (Mantenida): Asignar el mes y año como enteros
-            now = timezone.now()
-            presupuesto.mes = now.month
-            presupuesto.anio = now.year
-             
-            presupuesto.save()
-            messages.success(request, "¡Presupuesto creado exitosamente!")
-            return redirect('mi_finanzas:resumen_financiero') 
+            try:
+                presupuesto = form.save(commit=False)
+                presupuesto.usuario = request.user
+                presupuesto.save()
+                
+                messages.success(request, f'Presupuesto para {presupuesto.categoria.nombre} creado exitosamente.')
+                return redirect('mi_finanzas:resumen_financiero') 
+            
+            except IntegrityError:
+                messages.error(request, 'Ya existe un presupuesto para esta categoría en el mes y año seleccionados. Por favor, edítalo en su lugar.')
+            
+            except Exception as e:
+                messages.error(request, f'Error al guardar el presupuesto: {e}')
+                
     else:
-        form = PresupuestoForm(user=request.user)
-         
+        initial_data = {
+            'mes': timezone.localdate().month,
+            'anio': timezone.localdate().year,
+        }
+        # 💡 CORRECCIÓN CRÍTICA: Cambiado user=request.user a request=request
+        form = PresupuestoForm(initial=initial_data, request=request)
+        
     context = {
         'form': form,
         'titulo': 'Crear Nuevo Presupuesto'
@@ -505,18 +543,28 @@ def editar_presupuesto(request, pk):
     presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
     
     if request.method == 'POST':
-        form = PresupuestoForm(request.POST, user=request.user, instance=presupuesto)
-         
+        # 💡 CORRECCIÓN CRÍTICA: Cambiado user=request.user a request=request
+        form = PresupuestoForm(request.POST, request=request, instance=presupuesto)
+        
         if form.is_valid():
-            presupuesto_editado = form.save(commit=False)
-            presupuesto_editado.usuario = request.user
-            presupuesto_editado.save()
-            messages.success(request, f"Presupuesto para '{presupuesto_editado.categoria.nombre}' actualizado exitosamente.")
-            return redirect('mi_finanzas:resumen_financiero')
+            try:
+                presupuesto_editado = form.save(commit=False)
+                presupuesto_editado.usuario = request.user
+                presupuesto_editado.save()
+
+                messages.success(request, f"Presupuesto para '{presupuesto_editado.categoria.nombre}' actualizado exitosamente.")
+                return redirect('mi_finanzas:resumen_financiero')
+            
+            except IntegrityError:
+                messages.error(request, 'Ya existe otro presupuesto con esa misma combinación de Categoría, Mes y Año. Por favor, revisa tus presupuestos.')
+
+            except Exception as e:
+                messages.error(request, f"Error al guardar el presupuesto: {e}")
             
     else:
-        form = PresupuestoForm(user=request.user, instance=presupuesto)
-         
+        # 💡 CORRECCIÓN CRÍTICA: Cambiado user=request.user a request=request
+        form = PresupuestoForm(request=request, instance=presupuesto)
+        
     context = {
         'form': form,
         'titulo': f'Editar Presupuesto: {presupuesto.categoria.nombre}'
@@ -535,10 +583,10 @@ def eliminar_presupuesto(request, pk):
     try:
         nombre_categoria = presupuesto.categoria.nombre
         presupuesto.delete()
-         
+        
         messages.success(request, f"El presupuesto para '{nombre_categoria}' ha sido eliminado.")
         return redirect('mi_finanzas:resumen_financiero')
-         
+        
     except Exception as e:
         messages.error(request, f"Error al eliminar el presupuesto: {e}")
         return redirect('mi_finanzas:resumen_financiero')
@@ -554,76 +602,41 @@ def reportes_financieros(request):
     Vista para generar y mostrar reportes detallados y gráficos.
     """
     usuario = request.user
+    hoy = timezone.localdate()
+    mes_actual = hoy.month
+    anio_actual = hoy.year
     
-    # 💡 OPTIMIZACIÓN: Añadir select_related('categoria') si es necesario
+    # 1. GASTOS TOTALES POR CATEGORÍA (Para Gráfico Circular)
     gastos_totales_por_categoria = Transaccion.objects.filter(
         usuario=usuario,
-        tipo='GASTO'
+        tipo='GASTO',
+        fecha__year=anio_actual,
+        fecha__month=mes_actual
     ).values('categoria__nombre').annotate(
-        total=Sum('monto')
+        total=Coalesce(Sum('monto'), Decimal(0.00))
     ).order_by('-total')
 
+    # 2. Resumen Mensual (Ingresos vs Gastos)
+    resumen_mensual = Transaccion.objects.filter(
+        usuario=usuario,
+        fecha__year=anio_actual,
+        fecha__month=mes_actual
+    ).aggregate(
+        total_ingresos=Coalesce(Sum('monto', filter=F('tipo') == 'INGRESO'), Decimal(0.00), output_field=DecimalField()),
+        total_gastos=Coalesce(Sum('monto', filter=F('tipo') == 'GASTO'), Decimal(0.00), output_field=DecimalField())
+    )
+    
+    ingresos = resumen_mensual['total_ingresos']
+    gastos = resumen_mensual['total_gastos']
+    flujo_caja_neto = ingresos - gastos
+
     context = {
-        'titulo': 'Reportes y Análisis',
+        'titulo': f'Reportes y Análisis ({hoy.strftime("%B %Y")})',
         'gastos_por_categoria': gastos_totales_por_categoria,
+        'resumen_mensual': {
+            'ingresos': ingresos,
+            'gastos': gastos,
+            'neto': flujo_caja_neto
+        }
     }
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
-
-
-
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.db import transaction, IntegrityError # Necesitamos IntegrityError
-from django.contrib import messages
-from django.utils import timezone
-# ... y tu nuevo formulario
-from .forms import PresupuestoForm 
-# ...
-
-@login_required
-def crear_presupuesto(request):
-    """
-    Vista para crear un nuevo presupuesto, asegurando que no haya duplicados 
-    por usuario, categoría, mes y año (gracias al unique_together del modelo).
-    """
-    if request.method == 'POST':
-        # Pasamos el request al formulario para que pueda filtrar las categorías
-        form = PresupuestoForm(request.POST, request=request)
-        
-        if form.is_valid():
-            try:
-                # 1. Guardar la instancia sin guardarla en la BD (commit=False)
-                presupuesto = form.save(commit=False)
-                
-                # 2. Asignar el usuario actual (obligatorio en tu modelo)
-                presupuesto.usuario = request.user
-                
-                # 3. Intentar guardar
-                presupuesto.save()
-                
-                messages.success(request, f'Presupuesto para {presupuesto.categoria.nombre} creado exitosamente.')
-                # TODO: Cambiar 'resumen_financiero' por la vista de listado de presupuestos
-                return redirect('mi_finanzas:resumen_financiero') 
-            
-            except IntegrityError:
-                # Captura el error de unique_together si ya existe un presupuesto para ese mes/categoría
-                messages.error(request, 'Ya existe un presupuesto para esta categoría en el mes y año seleccionados. Por favor, edítalo en su lugar.')
-            
-            except Exception as e:
-                # Para otros errores de base de datos
-                messages.error(request, f'Error al guardar el presupuesto: {e}')
-                
-    else:
-        # 1. Inicializar el formulario con el mes y año actuales
-        initial_data = {
-            'mes': timezone.localdate().month,
-            'anio': timezone.localdate().year,
-        }
-        form = PresupuestoForm(initial=initial_data, request=request)
-        
-    context = {
-        'form': form,
-        'titulo': 'Crear Nuevo Presupuesto'
-    }
-    return render(request, 'mi_finanzas/crear_presupuesto.html', context)
-

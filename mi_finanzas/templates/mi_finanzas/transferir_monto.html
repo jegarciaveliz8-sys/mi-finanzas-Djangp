@@ -1,46 +1,55 @@
-{% extends "base.html" %}
-{% load crispy_forms_tags %}
-
-{% block title %}Transferir Fondos{% endblock %}
+{% extends "mi_finanzas/base.html" %} 
 
 {% block content %}
-<div class="container mt-4">
+<div class="container mt-5">
     <div class="row justify-content-center">
-        <div class="col-md-8 col-lg-6">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">{{ titulo }}</h4>
-                </div>
-                <div class="card-body">
+        <div class="col-md-8">
+            <h2 class="mb-4 text-primary">{{ titulo }}</h2>
 
-                    {% if messages %}
-                        {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                            </div>
-                        {% endfor %}
+            {% if messages %}
+                <ul class="messages list-unstyled">
+                    {% for message in messages %}
+                        <li class="alert alert-{{ message.tags }} p-2">
+                            {{ message }}
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <div class="card p-4 shadow-sm">
+                <form method="post" action="{% url 'mi_finanzas:transferir_monto' %}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label for="{{ form.cuenta_origen.id_for_label }}" class="form-label">Cuenta de Origen (De)</label>
+                        {{ form.cuenta_origen }}
+                        <div class="form-text text-muted">Selecciona la cuenta de la que saldrá el dinero.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.cuenta_destino.id_for_label }}" class="form-label">Cuenta de Destino (A)</label>
+                        {{ form.cuenta_destino }}
+                        <div class="form-text text-muted">Selecciona la cuenta que recibirá el dinero.</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="{{ form.monto.id_for_label }}" class="form-label">Monto a Transferir ($)</label>
+                        {{ form.monto }}
+                        <div class="form-text text-muted">Asegúrate de tener saldo suficiente en la cuenta de origen.</div>
+                    </div>
+
+                    {% if form.errors %}
+                        <div class="alert alert-danger mt-3">
+                            <strong>Errores del Formulario:</strong>
+                            {{ form.non_field_errors }}
+                        </div>
                     {% endif %}
 
-                    <form method="post">
-                        {% csrf_token %}
-
-                        {# Renderiza los campos del formulario de transferencia usando crispy_forms #}
-                        {{ form|crispy }}
-
-                        <div class="d-grid gap-2 mt-4">
-                            <button type="submit" class="btn btn-success btn-lg">
-                                <i class="fas fa-exchange-alt"></i> Realizar Transferencia
-                            </button>
-                            <a href="{% url 'mi_finanzas:resumen_financiero' %}" class="btn btn-outline-secondary">
-                                Cancelar
-                            </a>
-                        </div>
-                    </form>
-                </div>
+                    <button type="submit" class="btn btn-primary mt-3">Realizar Transferencia</button>
+                    <a href="{% url 'mi_finanzas:resumen_financiero' %}" class="btn btn-secondary mt-3">Cancelar</a>
+                </form>
             </div>
         </div>
     </div>
 </div>
-{% endblock %}
-
+{% endblock content %}
