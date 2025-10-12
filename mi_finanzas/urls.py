@@ -1,8 +1,7 @@
 from django.urls import path
 from . import views
 
-# Define el namespace de la aplicación. Es CRÍTICO que sea consistente.
-# Si tu app se llama 'mi_finanzas', usa 'mi_finanzas' aquí.
+# Define el namespace de la aplicación.
 app_name = 'mi_finanzas' 
 
 # LISTA ÚNICA Y COMPLETA DE URLS
@@ -46,12 +45,12 @@ urlpatterns = [
     path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
     path('presupuesto/<int:pk>/eliminar/', views.eliminar_presupuesto, name='eliminar_presupuesto'),
     
-    # RUTA DE EDICIÓN DEL PRESUPUESTO (Usando la nueva UpdateView)
-    path('presupuesto/<int:pk>/editar/', views.PresupuestoUpdateView.as_view(), name='editar_presupuesto'),
+    # RUTA DE EDICIÓN DEL PRESUPUESTO - ¡CORREGIDA!
+    # Ahora apunta a la función 'views.editar_presupuesto' para evitar el AttributeError.
+    path('presupuesto/<int:pk>/editar/', views.editar_presupuesto, name='editar_presupuesto'),
 
     # =========================================================
     # 6. Reportes
     # =========================================================
     path('reportes/', views.reportes_financieros, name='reportes_financieros'),
 ]
-
