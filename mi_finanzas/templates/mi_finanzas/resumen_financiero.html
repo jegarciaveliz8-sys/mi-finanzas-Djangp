@@ -1,326 +1,147 @@
-{% extends 'base.html' %} 
-{% load humanize %} 
+from django.shortcuts import render
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
+from decimal import Decimal
+from django.contrib.auth.decorators import login_required
+from datetime import date
+import calendar
+import json # Necesario para enviar datos al gráfico de gastos
 
-{% block title %}Panel de Control{% endblock title %}
+from .models import Cuenta, Transaccion, Presupuesto
+from .utils import obtener_color_presupuesto
 
-{% block content %}
-
-<h1 class="mb-4">Bienvenido a tu Panel de Control</h1>
-
-{# ------------------------------------------ #}
-{# 1. MENSAJE DE ESTADO FINANCIERO DINÁMICO #}
-{# ------------------------------------------ #}
-<div class="alert {{ estado_financiero.tipo }} d-flex align-items-center" role="alert">
-    <i class="fas {{ estado_financiero.icono }} fa-2x me-3"></i>
-    <div class="ms-3">
-        <strong>Estado Financiero General:</strong> {{ estado_financiero.mensaje }}
-    </div>
-</div>
-
-<hr>
-
-{# ------------------------------------------ #}
-{# 2. MÉTRICAS CLAVE #}
-{# ------------------------------------------ #}
-<div class="row mb-4">
-    <div class="col-md-4">
-        <div class="card shadow-sm border-primary">
-            <div class="card-body">
-                <h5 class="card-title text-muted">SALDO TOTAL NETO</h5>
-                <p class="h3 mb-0 text-primary">$ {{ saldo_total_neto|floatformat:2|intcomma }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card shadow-sm border-success">
-            <div class="card-body">
-                <h5 class="card-title text-muted">INGRESOS DEL MES</h5>
-                <p class="h3 mb-0 text-success">$ {{ ingresos_del_mes|floatformat:2|intcomma }}</p>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card shadow-sm border-danger">
-            <div class="card-body">
-                <h5 class="card-title text-muted">GASTOS DEL MES ({{ mes_actual }} {{ anio_actual }})</h5>
-                <p class="h3 mb-0 text-danger">-$ {{ gastos_del_mes|floatformat:2|intcomma }}</p>
-            </div>
-        </div>
-    </div>
-</div>
-
-{# ------------------------------------------ #}
-{# 2.5. BOTONES DE ACCIÓN RÁPIDA (NUEVOS) #}
-{# ------------------------------------------ #}
-<div class="row mb-5 justify-content-center">
-    <div class="col-md-3 mb-2">
-        <a href="{% url 'mi_finanzas:anadir_transaccion' %}" class="btn btn-success btn-block shadow-sm">
-            <i class="fas fa-plus"></i> Registrar Transacción
-        </a>
-    </div>
-    <div class="col-md-3 mb-2">
-        <a href="{% url 'mi_finanzas:transferir_monto' %}" class="btn btn-warning btn-block shadow-sm">
-            <i class="fas fa-exchange-alt"></i> Realizar Transferencia
-        </a>
-    </div>
-    <div class="col-md-3 mb-2">
-        <a href="{% url 'mi_finanzas:reportes_financieros' %}" class="btn btn-info btn-block shadow-sm">
-            <i class="fas fa-chart-pie"></i> Ver Reportes
-        </a>
-    </div>
-</div>
-
-<hr>
-
-{# ------------------------------------------ #}
-{# 3. CUENTAS Y GRÁFICO DE GASTOS #}
-{# ------------------------------------------ #}
-<div class="row">
+@login_required
+def resumen_financiero(request):
+    usuario = request.user
+    hoy = date.today()
+    mes_actual_num = hoy.month
+    anio_actual = hoy.year
     
-    <div class="col-lg-6 mb-4">
-        <h2>Tus Cuentas</h2>
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover">
-                        <thead>
-                            <tr>
-                                <th>Nombre</th>
-                                <th>Tipo</th>
-                                <th class="text-right">Balance</th>
-                                <th>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for cuenta in cuentas %}
-                            <tr>
-                                <td>{{ cuenta.nombre }}</td>
-                                <td>{{ cuenta.get_tipo_display }}</td>
-                                <td class="text-right">$ {{ cuenta.balance|floatformat:2|intcomma }}</td>
-                                <td>
-                                    <a href="{% url 'mi_finanzas:editar_cuenta' cuenta.pk %}" class="btn btn-sm btn-outline-info">Editar</a>
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="4" class="text-center text-muted">No tienes cuentas registradas. <a href="{% url 'mi_finanzas:anadir_cuenta' %}">¡Agrega una aquí!</a></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="text-center">
-                    <a href="{% url 'mi_finanzas:anadir_cuenta' %}" class="btn btn-sm btn-outline-success">Añadir Cuenta</a>
-                </div>
-            </div>
-        </div>
-    </div>
+    # Obtener el nombre del mes actual en español (asumiendo que Django ya maneja el locale)
+    mes_actual = calendar.month_name[mes_actual_num] # El nombre del mes en inglés, si necesitas español puro usa un diccionario o el módulo locale
 
-    <div class="col-lg-6 mb-4">
-        <h2>Gastos por Categoría (Mes Actual)</h2>
-        <div class="card shadow-sm">
-            <div class="card-body">
-                {% if gastos_del_mes > 0 %}
-                    <div class="mb-4" style="height: 300px;">
-                        <canvas id="gastosChart"></canvas>
-                    </div>
+    # 1. SALDOS Y MÉTRICAS GENERALES
+    
+    # Sumar el balance de todas las cuentas
+    saldo_total_neto = Cuenta.objects.filter(usuario=usuario).aggregate(
+        total=Coalesce(Sum('balance'), Decimal(0.00))
+    )['total']
 
-                    <h5 class="mt-4">Desglose de Gastos</h5>
-                    <ul class="list-group list-group-flush">
-                        {% for gasto in gastos_por_categoria %}
-                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                {{ gasto.categoria__nombre }}
-                                <span class="font-weight-bold text-danger">
-                                    ${{ gasto.total|floatformat:2|intcomma }}
-                                </span>
-                            </li>
-                        {% endfor %}
-                    </ul>
-                {% else %}
-                    <p class="text-muted text-center py-5">No hay gastos registrados este mes para graficar.</p>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
+    # Transacciones base del mes actual
+    transacciones_mes_base = Transaccion.objects.filter(
+        usuario=usuario, 
+        fecha__year=anio_actual, 
+        fecha__month=mes_actual_num
+    )
 
-<hr>
+    # Ingresos del mes
+    ingresos_del_mes = transacciones_mes_base.filter(
+        tipo='INGRESO'
+    ).aggregate(
+        total=Coalesce(Sum('monto'), Decimal(0.00))
+    )['total']
+    
+    # Gastos del mes
+    # NOTA: Los gastos y transferencias tienen un signo negativo en la base de datos, 
+    # pero aquí los queremos como valor absoluto para mostrarlos.
+    gastos_del_mes_bruto = transacciones_mes_base.filter(
+        tipo='GASTO'
+    ).aggregate(
+        total=Coalesce(Sum('monto'), Decimal(0.00))
+    )['total']
+    
+    gastos_del_mes = abs(gastos_del_mes_bruto) # Usamos valor absoluto para el display
 
-{# ------------------------------------------ #}
-{# 4. PRESUPUESTOS (CON EDICIÓN Y ELIMINACIÓN CORREGIDA) #}
-{# ------------------------------------------ #}
-<h2 class="mt-5">📊 Presupuestos del Mes</h2>
-<div class="row">
-    {% if resultados_presupuesto %}
-        {% for resultado in resultados_presupuesto %}
-            <div class="col-md-6 mb-4">
-                <div class="card shadow-sm">
-                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">{{ resultado.categoria_nombre }}</h5>
-                        
-                        <div class="btn-group btn-group-sm" role="group">
-                            <a href="{% url 'mi_finanzas:editar_presupuesto' resultado.pk %}" class="btn btn-outline-primary" title="Editar">
-                                <i class="fas fa-pen"></i> Editar
-                            </a>
-                            <form method="POST" action="{% url 'mi_finanzas:eliminar_presupuesto' resultado.pk %}" style="display:inline;">
-                                {% csrf_token %}
-                                <button type="submit" class="btn btn-outline-danger" title="Eliminar" onclick="return confirm('¿Estás seguro de que quieres eliminar el presupuesto para {{ resultado.categoria_nombre }}?');">
-                                    <i class="fas fa-trash"></i> Eliminar
-                                </button>
-                            </form>
-                        </div>
-                                            </div>
-                    <div class="card-body">
-                        <p class="card-text small text-muted">
-                            Límite: <strong>${{ resultado.limite|floatformat:2|intcomma }}</strong> | 
-                            Gastado: <strong>${{ resultado.gastado|floatformat:2|intcomma }}</strong>
-                        </p>
-                        
-                        <div class="progress mb-2" style="height: 20px;">
-                            <div class="progress-bar {{ resultado.color_barra }}" role="progressbar" 
-                                style="width: {{ resultado.porcentaje|floatformat:0 }}%" 
-                                aria-valuenow="{{ resultado.porcentaje|floatformat:0 }}" aria-valuemin="0" aria-valuemax="100">
-                                {{ resultado.porcentaje|floatformat:1 }}%
-                            </div>
-                        </div>
+    # 2. GASTOS POR CATEGORÍA (Para el Gráfico)
+    gastos_por_categoria_queryset = transacciones_mes_base.filter(
+        tipo='GASTO'
+    ).values('categoria__nombre').annotate(
+        total=Coalesce(Sum('monto'), Decimal(0.00))
+    ).order_by('-total') # Ordenamos de mayor a menor gasto
 
-                        {% with restante=resultado.restante|floatformat:2 %}
-                            {% if resultado.restante >= 0 %}
-                                <p class="text-success small">Te quedan <strong>${{ restante|intcomma }}</strong></p>
-                            {% else %}
-                                <p class="text-danger small">¡Te excediste por <strong>${{ restante|slice:"1:"|intcomma }}</strong>!</p>
-                            {% endif %}
-                        {% endwith %}
-                    </div>
-                </div>
-            </div>
-        {% endfor %}
-        <div class="col-md-12 text-center mt-3">
-            <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="btn btn-primary">Añadir Nuevo Presupuesto</a>
-        </div>
-    {% else %}
-        <div class="col-12">
-            <div class="alert alert-info text-center">
-                Aún no has configurado presupuestos para el mes actual. <a href="{% url 'mi_finanzas:crear_presupuesto' %}">Crea uno ahora.</a>
-            </div>
-        </div>
-    {% endif %}
-</div>
+    # Preparar datos para Chart.js
+    chart_labels = [item['categoria__nombre'] for item in gastos_por_categoria_queryset]
+    # Usamos el valor absoluto para las barras del gráfico
+    chart_data_values = [abs(item['total']) for item in gastos_por_categoria_queryset]
+    
+    chart_data = json.dumps({
+        'labels': chart_labels,
+        'data': chart_data_values
+    })
 
-<hr>
+    # 3. PRESUPUESTOS (LA CORRECCIÓN ESTÁ AQUÍ)
+    
+    # 3.1 Obtener todos los presupuestos activos (el QuerySet original)
+    presupuestos_activos = Presupuesto.objects.filter(
+        usuario=usuario, 
+        mes=mes_actual_num, 
+        anio=anio_actual
+    ).select_related('categoria') 
+    
+    resultados_presupuesto = []
+    
+    for presupuesto in presupuestos_activos:
+        # 3.2 Calcular el gasto real para esta categoría
+        gasto_real = transacciones_mes_base.filter(
+            tipo='GASTO',
+            categoria=presupuesto.categoria,
+        ).aggregate(
+            total=Coalesce(Sum('monto'), Decimal(0.00))
+        )['total']
 
-{# ------------------------------------------ #}
-{# 5. ACTIVIDAD RECIENTE #}
-{# ------------------------------------------ #}
-<div class="row mt-5">
-    <div class="col-lg-12 mb-4">
-        <h2 class="mt-4">Actividad Reciente</h2>
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-striped table-sm">
-                        <thead>
-                            <tr>
-                                <th>Fecha</th>
-                                <th>Descripción</th>
-                                <th>Cuenta</th>
-                                <th>Categoría</th>
-                                <th class="text-right">Monto</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for transaccion in ultimas_transacciones %}
-                            <tr>
-                                <td>{{ transaccion.fecha|date:"d M, Y" }}</td>
-                                <td>{{ transaccion.descripcion }}</td>
-                                <td>{{ transaccion.cuenta.nombre }}</td>
-                                <td>{{ transaccion.categoria.nombre|default:"N/A" }}</td>
-                                <td class="text-right 
-                                    {% if transaccion.tipo == 'INGRESO' %}text-success
-                                    {% else %}text-danger{% endif %}">
-                                    {% if transaccion.tipo == 'GASTO' or transaccion.tipo == 'TRANSFERENCIA' %}
-                                    -
-                                {% endif %}
-                                    ${{ transaccion.monto|floatformat:2|intcomma }}
-                                </td>
-                            </tr>
-                            {% empty %}
-                            <tr>
-                                <td colspan="5" class="text-center text-muted">Aún no hay transacciones recientes.</td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                <div class="text-center pt-2">
-                    <a href="#" class="btn btn-sm btn-outline-secondary">Ver todo el historial</a> 
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% endblock content %} 
-
-{# ------------------------------------------ #}
-{# 6. JAVASCRIPT Y CHART.JS #}
-{# ------------------------------------------ #}
-{% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-
-<script>
-    // Se ejecuta solo si el Canvas existe en el DOM
-    const ctx = document.getElementById('gastosChart');
-
-    if (ctx) {
+        # Usamos el valor absoluto del gasto
+        gasto_real = abs(gasto_real)
         
-        // 1. Parsear los datos de Django a un objeto JavaScript
-        const chartDataObject = JSON.parse('{{ chart_data | safe }}'); 
+        # 3.3 Calcular métricas
+        limite = presupuesto.monto
+        porcentaje = (gasto_real / limite) * 100 if limite > 0 else 0
+        restante = limite - gasto_real
         
-        const labels = chartDataObject.labels;
-        const data = chartDataObject.data;
-
-        // Función para generar colores de forma dinámica
-        function generateColors(count) {
-            const colors = [];
-            for (let i = 0; i < count; i++) {
-                // Genera colores distintos (usando el círculo cromático)
-                const hue = (i * 137.508) % 360; 
-                colors.push(`hsl(${hue}, 70%, 50%)`);
-            }
-            return colors;
-        }
+        # 3.4 Determinar el color de la barra (utils.py)
+        color_barra = obtener_color_presupuesto(porcentaje)
         
-        const backgroundColors = generateColors(labels.length);
+        # 3.5 Crear el objeto de resultado
+        resultados_presupuesto.append({
+            'pk': presupuesto.pk,
+            'categoria_nombre': presupuesto.categoria.nombre,
+            'limite': limite,
+            'gastado': gasto_real,
+            'porcentaje': porcentaje,
+            'restante': restante,
+            'color_barra': color_barra
+        })
 
-        // 2. Inicialización del Gráfico
-        if (labels.length > 0) {
-            new Chart(ctx.getContext('2d'), {
-                type: 'pie', 
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Monto de Gasto',
-                        data: data,
-                        backgroundColor: backgroundColors,
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false, 
-                    plugins: {
-                        legend: {
-                            position: 'right', 
-                        },
-                        title: {
-                            display: false,
-                        }
-                    }
-                }
-            });
-        }
+    # 4. OTRAS MÉTRICAS
+    cuentas = Cuenta.objects.filter(usuario=usuario).order_by('nombre')
+    ultimas_transacciones = Transaccion.objects.filter(usuario=usuario).order_by('-fecha')[:5]
+
+    # Lógica del Estado Financiero General (Simplificada)
+    if saldo_total_neto >= 1000 and ingresos_del_mes > gastos_del_mes:
+        estado_financiero = {'mensaje': '¡Excelente! Tu salud financiera es fuerte. Sigue así.', 'tipo': 'alert-success', 'icono': 'fa-check-circle'}
+    elif saldo_total_neto >= 0:
+        estado_financiero = {'mensaje': 'Estás en territorio positivo, pero considera aumentar tus ahorros.', 'tipo': 'alert-warning', 'icono': 'fa-exclamation-triangle'}
+    else:
+        estado_financiero = {'mensaje': 'Tu saldo es negativo. ¡Revisa tus gastos y ajusta tus presupuestos!', 'tipo': 'alert-danger', 'icono': 'fa-times-circle'}
+
+
+    # 5. EL DICCIONARIO DE CONTEXTO CORREGIDO
+    contexto = {
+        'saldo_total_neto': saldo_total_neto,
+        'ingresos_del_mes': ingresos_del_mes,
+        'gastos_del_mes': gastos_del_mes,
+        'mes_actual': mes_actual, 
+        'anio_actual': anio_actual,
+        
+        'cuentas': cuentas,
+        'gastos_por_categoria': gastos_por_categoria_queryset,
+        'chart_data': chart_data,
+        
+        # ESTA ES LA CLAVE CORREGIDA QUE HACE QUE FUNCIONE
+        'resultados_presupuesto': resultados_presupuesto, 
+        
+        'ultimas_transacciones': ultimas_transacciones,
+        'estado_financiero': estado_financiero,
     }
-</script>
-{% endblock extra_js %}
+
+    return render(request, 'mi_finanzas/resumen_financiero.html', contexto)
 
