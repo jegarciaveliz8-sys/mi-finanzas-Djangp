@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block title %}Lista de Presupuestos{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="mb-0">Mis Presupuestos</h1>
+        <a href="{% url 'presupuestos:crear_presupuesto' %}" class="btn btn-success">
+            + Nuevo Presupuesto
+        </a>
+    </div>
+
+    {% if presupuestos %}
+        <table class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>Categoría</th>
+                    <th>Mes/Año</th>
+                    <th>Límite</th>
+                    <th>Gastado (Estimado)</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for presupuesto in presupuestos %}
+                <tr>
+                    <td>{{ presupuesto.categoria.nombre }}</td>
+                    <td>{{ presupuesto.mes|default:'--' }}/{{ presupuesto.anio }}</td>
+                    <td>${{ presupuesto.monto_limite|floatformat:2 }}</td>
+                    
+                    <td>$0.00</td> 
+                    
+                    <td>
+                        <a href="{% url 'presupuestos:editar_presupuesto' presupuesto.pk %}" class="btn btn-sm btn-info">Editar</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="alert alert-info" role="alert">
+            Aún no has creado ningún presupuesto. ¡Empieza creando uno!
+        </div>
+    {% endif %}
+{% endblock %}
+

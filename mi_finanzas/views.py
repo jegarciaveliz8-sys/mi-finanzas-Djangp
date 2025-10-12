@@ -659,3 +659,31 @@ def reportes_financieros(request):
         }
     }
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
+
+
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from .models import Presupuesto # Asegúrate de que Presupuesto está importado
+
+# ... (tus otras vistas)
+
+@login_required
+def presupuestos_lista(request):
+    """
+    Muestra la lista de presupuestos creados por el usuario actual.
+    """
+    # 1. Obtener todos los presupuestos del usuario logueado
+    presupuestos = Presupuesto.objects.filter(usuario=request.user).order_by('-anio', '-mes')
+    
+    # 2. Preparar el contexto
+    contexto = {
+        'presupuestos': presupuestos,
+        # Puedes añadir aquí lógica de gasto vs. límite si es necesario
+    }
+    
+    # 3. Renderizar la plantilla
+    return render(request, 'presupuestos/lista_presupuestos.html', contexto)
+
+# ... (fin del archivo)
+
