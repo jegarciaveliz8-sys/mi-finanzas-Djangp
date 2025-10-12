@@ -2,7 +2,7 @@ from django.urls import path
 from . import views
 
 # Define el namespace de la aplicación
-# CORREGIDO: Cambiado de 'mi_finanzas' a 'presupuestos' para resolver NoReverseMatch.
+# NOTA: Usamos 'presupuestos' porque las plantillas lo referencian así.
 app_name = 'presupuestos' 
 
 # LISTA ÚNICA DE URLS
@@ -19,7 +19,6 @@ urlpatterns = [
     path('', views.resumen_financiero, name='resumen_financiero'),
     path('resumen/', views.resumen_financiero, name='resumen_financiero'), 
     path('cuentas/', views.cuentas_lista, name='cuentas_lista'),
-    # 🛑 CORRECCIÓN: Se cambió 'transacciones/' por 'transacciones/lista/'
     path('transacciones/lista/', views.transacciones_lista, name='transacciones_lista'), 
     
     # =========================================================
@@ -42,6 +41,9 @@ urlpatterns = [
     # =========================================================
     # 5. CRUD de Presupuestos
     # =========================================================
+    # 💡 RUTA FALTANTE CORREGIDA: Se añade la URL para listar todos los presupuestos.
+    path('presupuestos/', views.presupuestos_lista, name='lista_presupuestos'), 
+    
     path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
     path('presupuesto/<int:pk>/editar/', views.editar_presupuesto, name='editar_presupuesto'),
     path('presupuesto/<int:pk>/eliminar/', views.eliminar_presupuesto, name='eliminar_presupuesto'),
