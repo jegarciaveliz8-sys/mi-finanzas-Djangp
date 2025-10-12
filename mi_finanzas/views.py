@@ -164,7 +164,7 @@ def resumen_financiero(request):
         'cuentas': cuentas,
         'gastos_por_categoria': gastos_por_categoria_qs,
         'chart_data': chart_data_json,
-        'presupuestos': presupuestos_activos, # Variable corregida
+        'resultados_presupuesto': presupuestos_activos,
         'ultimas_transacciones': ultimas_transacciones,
         'estado_financiero': estado_financiero,
     }
