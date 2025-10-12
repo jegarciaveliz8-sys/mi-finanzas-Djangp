@@ -20,7 +20,7 @@ SECRET_KEY = 'django-insecure-33^d*8(2f!7&y(f8k5g*s!0f2j00+c2w2m1f8$20e=g0k0a0p'
 DEBUG = True
 
 # ⚠️ ALLOWED_HOSTS: Añadir tu dominio o IP del servidor en producción.
-ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.39', 'localhost'] 
+ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.39', 'localhost''0.0.0.0'] 
 
 # 💡 CONFIGURACIÓN PARA DJANGO DEBUG TOOLBAR
 # Estas IPs tienen permiso para ver la barra de depuración.
