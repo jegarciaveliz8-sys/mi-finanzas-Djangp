@@ -4,15 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    {# CORRECCIÓN 1: Asegura que el bloque 'title' se cierre correctamente #}
+    {# El título de la página #}
     <title>{% block title %}MiGestorFinanciero{% endblock %}</title>
+
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH" crossorigin="anonymous">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLMDJvT2IeG2r6lC3H6wH/C6nC7yV9d+x/5I9yFqO3gD+x/4hN/J+9A+w2wKzD/A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
+    {# Bloque para CSS adicional por página #}
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     
+    {# Barra de Navegación (Navbar) #}
     <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
         <div class="container-fluid container">
             <a class="navbar-brand fw-bold" href="{% url 'mi_finanzas:resumen_financiero' %}">MiFinanzas</a>
@@ -31,8 +35,9 @@
                             <a class="nav-link" href="{% url 'mi_finanzas:transacciones_lista' %}">Historial</a>
                         </li>
                         <li class="nav-item">
+                            {# Usando icono de Font Awesome en lugar de Bootstrap Icons #}
                             <a class="nav-link" href="{% url 'mi_finanzas:anadir_transaccion' %}">
-                                <i class="bi bi-plus-circle-fill me-1"></i> Añadir Transacción
+                                <i class="fas fa-plus-circle me-1"></i> Añadir Transacción
                             </a>
                         </li>
                     {% endif %}
@@ -48,11 +53,9 @@
                         </li>
                     {% else %}
                         <li class="nav-item">
-                            {# CORRECCIÓN 2: Enlace de Iniciar Sesión #}
                             <a class="btn btn-sm btn-outline-light me-2" href="{% url 'auth:login' %}">Iniciar Sesión</a>
                         </li>
                         <li class="nav-item">
-                            {# CORRECCIÓN 3: Opción FINAL - Cambiado a 'signup' #}
                             <a class="btn btn-sm btn-warning" href="{% url 'signup' %}">Registrarse</a> 
                         </li>
                     {% endif %}
@@ -61,15 +64,19 @@
         </div>
     </nav>
 
+    {# Contenido Principal de la Página #}
     <main class="container mt-4">
         {% block content %}
-            {% endblock content %}
+        {% endblock content %}
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     
+    {# 4. Chart.js (Generalmente necesario, aunque la página que lo usa lo puede cargar también) #}
+    {# Lo dejo aquí para garantizar que esté disponible en caso de que lo necesiten otras páginas #}
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     
+    {# Bloque para JavaScript específico de la página #}
     {% block extra_js %}{% endblock %}
 </body>
 </html>
