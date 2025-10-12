@@ -7,12 +7,14 @@
     <div class="container mt-5">
         <h1 class="mb-4">Panel de Control Financiero</h1>
         
-                <div class="alert {{ estado_financiero.tipo }}" role="alert">
+        {# Alerta de Salud Financiera #}
+        <div class="alert {{ estado_financiero.tipo }}" role="alert">
             <i class="{{ estado_financiero.icono }} me-2"></i> <strong>¡Estado!</strong> {{ estado_financiero.mensaje }}
         </div>
         
-                <div class="row mb-4">
-                        <div class="col-lg-4 col-md-6 mb-3">
+        {# Métricas Principales (Saldo, Ingresos, Gastos) #}
+        <div class="row mb-4">
+            <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card text-white bg-primary shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Saldo Total Neto</h5>
@@ -20,7 +22,7 @@
                     </div>
                 </div>
             </div>
-                        <div class="col-lg-4 col-md-6 mb-3">
+            <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card text-white bg-success shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Ingresos de {{ mes_actual }}</h5>
@@ -28,7 +30,7 @@
                     </div>
                 </div>
             </div>
-                        <div class="col-lg-4 col-md-12 mb-3">
+            <div class="col-lg-4 col-md-12 mb-3">
                 <div class="card text-white bg-danger shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Gastos de {{ mes_actual }}</h5>
@@ -38,7 +40,8 @@
             </div>
         </div>
 
-                <h2 class="mt-4 mb-3">📊 Presupuestos del Mes ({{ mes_actual }} {{ anio_actual }})</h2>
+        {# Sección de Presupuestos #}
+        <h2 class="mt-4 mb-3">📊 Presupuestos del Mes ({{ mes_actual }} {{ anio_actual }})</h2>
         <div class="row">
             
             {% if resultados_presupuesto %}
@@ -47,19 +50,16 @@
                         <div class="card shadow h-100">
                             <div class="card-body">
                                 <h5 class="card-title mb-3">
-                                    {# CORRECCIÓN 1: Usar .categoria.nombre #}
-                                    **{{ presupuesto.categoria.nombre }}**
+                                    <strong>{{ presupuesto.categoria.nombre }}</strong>
                                     <a href="{% url 'mi_finanzas:editar_presupuesto' presupuesto.pk %}" class="btn btn-sm btn-outline-secondary float-end">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                 </h5>
                                 
                                 <p class="card-text mb-1 small">
-                                    {# CORRECCIÓN 2: Usar monto_limite #}
                                     Límite: **${{ presupuesto.monto_limite|floatformat:2 }}**
                                 </p>
                                 <p class="card-text mb-2 small">
-                                    {# CORRECCIÓN 3: Usar gasto_actual #}
                                     Gastado: **${{ presupuesto.gasto_actual|floatformat:2 }}**
                                 </p>
 
@@ -88,11 +88,13 @@
             {% endif %}
         </div>
         
-                <div class="row mt-5">
+        {# Gráfico de Gastos y Cuentas #}
+        <div class="row mt-5">
             <div class="col-lg-6 mb-4">
                 <h2 class="mb-3">💸 Gastos por Categoría ({{ mes_actual }})</h2>
                 <div class="card shadow">
                     <div class="card-body">
+                        {# El JS usará este canvas o lo reemplazará por un mensaje #}
                         <canvas id="gastosChart"></canvas>
                     </div>
                 </div>
@@ -114,7 +116,8 @@
             </div>
         </div>
         
-                <h2 class="mt-5 mb-3">📰 Últimas Transacciones</h2>
+        {# Últimas Transacciones #}
+        <h2 class="mt-5 mb-3">📰 Últimas Transacciones</h2>
         <div class="card shadow mb-5">
             <ul class="list-group list-group-flush">
                 {% for transaccion in ultimas_transacciones %}
@@ -146,11 +149,11 @@
 {% endblock %}
 
 {% block extra_js %}
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            // Asegúrate de que chart_data está definido en el contexto de Django
-            const chartDataJson = JSON.parse('{{ chart_data|escapejs }}');
+            // CRÍTICO: Corrección de variable. Debe ser chart_data_json y usamos |safe.
+            const chartDataJson = JSON.parse('{{ chart_data_json | safe }}');
             const chartContainer = document.getElementById('gastosChart').parentNode;
             const labelsLength = chartDataJson.labels.length;
 
@@ -193,7 +196,7 @@
                     }
                 });
             } else {
-                // CASO 2 & 3: Cero o una sola categoría. Reemplaza el canvas por un mensaje.
+                // CASO 2 & 3: Cero o una sola categoría. Muestra un mensaje en lugar del gráfico.
                 let message;
                 let alertClass;
 
@@ -216,3 +219,4 @@
         });
     </script>
 {% endblock %}
+
