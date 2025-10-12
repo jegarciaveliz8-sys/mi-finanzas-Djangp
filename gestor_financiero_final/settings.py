@@ -73,7 +73,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'csp.middleware.CspMiddleware',
+    
 ]
 
 
@@ -177,25 +177,4 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 # CONFIGURACIÓN DE SEGURIDAD PARA CARGAR CDN (solución final)
 # =============================================================
 
-# Dominios permitidos para cargar scripts JS
-CSP_SCRIPT_SRC = (
-    "'self'", 
-    'https://cdn.jsdelivr.net', 
-    'https://cdnjs.cloudflare.com',
-)
-
-# Dominios permitidos para cargar hojas de estilo CSS (importante para Bootstrap/Font Awesome)
-CSP_STYLE_SRC = (
-    "'self'", 
-    'https://cdn.jsdelivr.net', 
-    'https://cdnjs.cloudflare.com',
-)
-
-# Esto es necesario para que Font Awesome cargue sus íconos (que son fuentes)
-CSP_FONT_SRC = (
-    "'self'", 
-    'https://cdn.jsdelivr.net', 
-    'https://cdnjs.cloudflare.com',
-)
-# =============================================================
 
