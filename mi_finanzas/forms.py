@@ -34,20 +34,13 @@ class TransaccionForm(forms.ModelForm):
     
     # CRÍTICO: Constructor para filtrar Cuentas y Categorías por Usuario
     def __init__(self, *args, **kwargs):
-        # 1. Interceptamos 'solicitar' si viene de la vista
-        request = kwargs.pop('solicitar', None) 
-        
-        # 2. Interceptamos 'request' si se pasó (para más robustez)
-        if request is None:
-            request = kwargs.pop('request', None)
-        
-        # 3. Mantenemos el soporte para pasar 'user' directamente (opcional)
+        # Usamos 'request' como nombre estandarizado para obtener el usuario
+        request = kwargs.pop('request', None) 
         user = kwargs.pop('user', None) 
         
-        # 4. Llamada al constructor base SIN las claves personalizadas
         super().__init__(*args, **kwargs) 
 
-        # 5. Determinar el usuario si no se pasó directamente
+        # Determinar el usuario si no se pasó directamente
         if user is None and request and request.user.is_authenticated:
             user = request.user
 
@@ -103,20 +96,13 @@ class TransferenciaForm(forms.Form):
 
     # EL CONSTRUCTOR CRÍTICO para filtrar Cuentas por Usuario
     def __init__(self, *args, **kwargs):
-        # 1. Interceptamos 'solicitar' si viene de la vista
-        request = kwargs.pop('solicitar', None)
-        
-        # 2. Interceptamos 'request' si se pasó (para más robustez)
-        if request is None:
-            request = kwargs.pop('request', None)
-
-        # 3. Mantenemos el soporte para pasar 'user' directamente (opcional)
+        # Usamos 'request' como nombre estandarizado para obtener el usuario
+        request = kwargs.pop('request', None)
         user = kwargs.pop('user', None) 
         
-        # 4. Llamada al constructor base SIN las claves personalizadas
         super().__init__(*args, **kwargs) 
 
-        # 5. Determinar el usuario si no se pasó directamente
+        # Determinar el usuario si no se pasó directamente
         if user is None and request and request.user.is_authenticated:
             user = request.user
 
@@ -142,7 +128,7 @@ class TransferenciaForm(forms.Form):
         return cleaned_data
 
 # ----------------------------------------------------
-# 4. Formulario de Presupuestos (CRUD)
+# 4. Formulario de Presupuestos (Creación)
 # ----------------------------------------------------
 
 hoy = timezone.localdate()
@@ -175,20 +161,13 @@ class PresupuestoForm(forms.ModelForm):
         
     # CRÍTICO: Constructor para filtrar Categorías por Usuario
     def __init__(self, *args, **kwargs):
-        # 1. Interceptamos 'solicitar' si viene de la vista (versión en español)
-        request = kwargs.pop('solicitar', None) 
-
-        # 2. Interceptamos 'request' si se pasó (versión en inglés) <--- ¡CORRECCIÓN CLAVE!
-        if request is None: 
-            request = kwargs.pop('request', None)
-
-        # 3. Mantenemos el soporte para pasar 'user' directamente (opcional)
+        # Usamos 'request' como nombre estandarizado para obtener el usuario
+        request = kwargs.pop('request', None) 
         user = kwargs.pop('user', None) 
         
-        # 4. Llamada al constructor base SIN las claves personalizadas
         super().__init__(*args, **kwargs)
         
-        # 5. Determinar el usuario para el filtrado
+        # Determinar el usuario para el filtrado
         if user is None and request and request.user.is_authenticated:
             user = request.user
         
@@ -196,6 +175,19 @@ class PresupuestoForm(forms.ModelForm):
             self.fields['categoria'].queryset = Categoria.objects.filter(usuario=user)
             self.fields['categoria'].widget.attrs.update({'class': 'form-select'}) # Aplica estilo
 
+# ----------------------------------------------------
+# 4.1 Formulario para EDITAR Presupuesto (Actualización)
+# ----------------------------------------------------
+
+class PresupuestoUpdateForm(forms.ModelForm):
+    class Meta:
+        model = Presupuesto
+        # Solo permite la edición del monto límite
+        fields = ['monto_limite']
+        widgets = {
+            'monto_limite': NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
+        }
+        
 # ----------------------------------------------------
 # 5. Formulario de Login y Registro
 # ----------------------------------------------------
@@ -220,4 +212,3 @@ class RegistroUsuarioForm(UserCreationForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.update({'class': 'form-control'})
-

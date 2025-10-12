@@ -646,3 +646,41 @@ def reportes_financieros(request):
     }
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
 
+
+
+from django.urls import reverse_lazy
+from django.views.generic.edit import UpdateView # <-- IMPORTAR
+from django.contrib.auth.mixins import LoginRequiredMixin # <-- IMPORTAR
+from .models import Presupuesto
+from .forms import PresupuestoUpdateForm # <-- USAR EL FORMULARIO NUEVO
+
+# ... (tus otras vistas, por ejemplo, resumen_financiero, CuentaCreateView, etc.)
+
+# ----------------------------------------------------
+# 8. Vista para Editar Presupuesto
+# ----------------------------------------------------
+
+class PresupuestoUpdateView(LoginRequiredMixin, UpdateView):
+    """
+    Permite al usuario editar el monto límite de su presupuesto.
+    """
+    model = Presupuesto
+    form_class = PresupuestoUpdateForm
+    template_name = 'mi_finanzas/presupuesto_editar.html'
+    
+    def get_success_url(self):
+        """Redirige al dashboard después de una edición exitosa."""
+        return reverse_lazy('mi_finanzas:resumen_financiero')
+
+    def get_queryset(self):
+        """Asegura que solo el usuario actual pueda editar sus presupuestos."""
+        # Filtra el objeto Presupuesto por el usuario actual
+        return self.model.objects.filter(usuario=self.request.user)
+
+    def get_context_data(self, **kwargs):
+        """Añade el nombre de la categoría al contexto para el título de la página."""
+        context = super().get_context_data(**kwargs)
+        # self.object es el objeto Presupuesto que se está editando
+        context['categoria_nombre'] = self.object.categoria.nombre
+        return context
+

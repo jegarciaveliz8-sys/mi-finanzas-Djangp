@@ -54,3 +54,15 @@ urlpatterns = [
     path('reportes/', views.reportes_financieros, name='reportes_financieros'),
 ]
 
+from django.urls import path
+from . import views
+
+app_name = 'mi_finanzas'
+
+urlpatterns = [
+    # ... (tus otras URLs)
+    
+    # URL para editar un presupuesto. El <int:pk> captura la ID del presupuesto.
+    path('presupuesto/editar/<int:pk>/', views.PresupuestoUpdateView.as_view(), name='editar_presupuesto'),
+]
+
