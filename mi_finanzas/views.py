@@ -43,7 +43,7 @@ class RegistroUsuario(CreateView):
 
 
 # =========================================================
-# 1. VISTA DE RESUMEN (PANEL DE CONTROL) - OPTIMIZADA
+# 1. VISTA DE RESUMEN (PANEL DE CONTROL) - ¡CORREGIDA!
 # =========================================================
 
 @login_required
@@ -59,27 +59,55 @@ def resumen_financiero(request):
         fecha__month=mes_actual, 
         fecha__year=anio_actual
     )
+    
+    # --- LÓGICA DE EXCLUSIÓN DE TRANSFERENCIAS (CORRECCIÓN CLAVE) ---
+    cats_a_excluir = []
+    # Usamos try-except para asegurar que no falle si el usuario no ha hecho una transferencia
+    # y las categorías aún no existen.
+    try:
+        cat_salida = Categoria.objects.get(nombre='Transferencia Salida', usuario=usuario)
+        cat_entrada = Categoria.objects.get(nombre='Transferencia Entrada', usuario=usuario)
+        cats_a_excluir = [cat_salida.pk, cat_entrada.pk]
+    except Categoria.DoesNotExist:
+        # Si no existen las categorías de transferencia, no excluimos nada.
+        pass
+
 
     # --- CÁLCULO DE MÉTRICAS GLOBALES ---
     saldo_total_neto = Cuenta.objects.filter(usuario=usuario).aggregate(
         total=Coalesce(Sum('balance'), Decimal(0.00), output_field=DecimalField())
     )['total']
     
-    # --- MÉTRICAS MENSUALES (Usando el QuerySet Base) ---
-    ingresos_del_mes = transacciones_mes_base.filter(tipo='INGRESO').aggregate(
+    # --- MÉTRICAS MENSUALES (Aplicando la exclusión) ---
+    
+    # Excluye la Transferencia Entrada para calcular INGRESOS REALES
+    ingresos_del_mes = transacciones_mes_base.filter(
+        tipo='INGRESO'
+    ).exclude(
+        categoria__pk__in=cats_a_excluir 
+    ).aggregate(
         total=Coalesce(Sum('monto'), Decimal(0.00), output_field=DecimalField())
     )['total']
     
-    gastos_del_mes = transacciones_mes_base.filter(tipo='GASTO').aggregate(
+    # Excluye la Transferencia Salida para calcular GASTOS REALES
+    gastos_del_mes = transacciones_mes_base.filter(
+        tipo='GASTO'
+    ).exclude(
+        categoria__pk__in=cats_a_excluir
+    ).aggregate(
         total=Coalesce(Sum('monto'), Decimal(0.00), output_field=DecimalField())
     )['total']
     
+    # -----------------------------------------------------------------
     # --- LISTA DE CUENTAS ---
     cuentas = Cuenta.objects.filter(usuario=usuario).order_by('nombre')
     
     # --- DATOS PARA GRÁFICO DE GASTOS ---
+    # También debemos excluir las transferencias del gráfico para que no distorsione los gastos por categoría
     gastos_por_categoria_qs = transacciones_mes_base.filter(
         tipo='GASTO',
+    ).exclude(
+        categoria__pk__in=cats_a_excluir
     ).values('categoria__nombre').annotate(
         total=Coalesce(Sum('monto'), Decimal(0.00))
     ).order_by('-total')
@@ -105,6 +133,7 @@ def resumen_financiero(request):
     
     for presupuesto in presupuestos_activos:
         # Filtramos los gastos del mes por la categoría
+        # NOTA: No excluimos aquí porque los presupuestos ya están filtrados por la categoría
         gasto_real = transacciones_mes_base.filter(
             tipo='GASTO',
             categoria=presupuesto.categoria,
@@ -133,9 +162,10 @@ def resumen_financiero(request):
             presupuesto.color_barra = 'bg-danger'
             
     # --- ACTIVIDAD RECIENTE (N+1 Resuelto) ---
+    # Pedimos 5 transacciones más el par de transferencia (2 más) para asegurar que se muestre.
     ultimas_transacciones = Transaccion.objects.filter(usuario=usuario).select_related(
         'cuenta', 'categoria'
-    ).order_by('-fecha')[:5] 
+    ).order_by('-fecha')[:7] 
     
     # --- LÓGICA DEL MENSAJE DE SALUD FINANCIERA ---
     if saldo_total_neto > 500: 
@@ -212,26 +242,30 @@ def transferir_monto(request):
                     Cuenta.objects.filter(pk=cuenta_destino.pk).update(balance=F('balance') + monto)
                     
                     # 2. CREAR TRANSACCIONES DE REGISTRO
-                    # CORRECCIÓN CLAVE: Usamos timezone.localdate() para registrar la fecha correctamente.
+                    # Nos aseguramos de que ambas transacciones se creen.
                     fecha_transaccion = timezone.localdate() 
                     
+                    # Transacción de GASTO (Salida de Origen)
                     Transaccion.objects.create(
                         usuario=request.user,
                         cuenta=cuenta_origen,
                         monto=monto,
                         tipo='GASTO',
-                        fecha=fecha_transaccion, # <--- ¡CORREGIDO!
+                        fecha=fecha_transaccion, 
                         descripcion=f"Transferencia Enviada a {cuenta_destino.nombre}",
+                        # Garantiza que la categoría de exclusión exista
                         categoria=Categoria.objects.get_or_create(nombre='Transferencia Salida', usuario=request.user)[0] 
                     )
                     
+                    # Transacción de INGRESO (Entrada a Destino)
                     Transaccion.objects.create(
                         usuario=request.user,
                         cuenta=cuenta_destino,
                         monto=monto,
                         tipo='INGRESO',
-                        fecha=fecha_transaccion, # <--- ¡CORREGIDO!
+                        fecha=fecha_transaccion, 
                         descripcion=f"Transferencia Recibida de {cuenta_origen.nombre}",
+                        # Garantiza que la categoría de exclusión exista
                         categoria=Categoria.objects.get_or_create(nombre='Transferencia Entrada', usuario=request.user)[0]
                     )
 
@@ -239,6 +273,7 @@ def transferir_monto(request):
                 return redirect('mi_finanzas:resumen_financiero') 
 
             except Exception as e:
+                # Si falla, se hace un rollback
                 messages.error(request, f"Error al procesar la transferencia: {e}")
                 
     else:
@@ -251,6 +286,8 @@ def transferir_monto(request):
     
     return render(request, 'mi_finanzas/transferir_monto.html', context)
 
+
+# ... (El resto de las vistas se mantienen IGUAL) ...
 
 @login_required
 def anadir_transaccion(request):
@@ -608,28 +645,44 @@ def reportes_financieros(request):
     mes_actual = hoy.month
     anio_actual = hoy.year
     
+    # Para los reportes, usamos el mismo principio de exclusión de transferencias
+    cats_a_excluir = []
+    try:
+        cat_salida = Categoria.objects.get(nombre='Transferencia Salida', usuario=usuario)
+        cat_entrada = Categoria.objects.get(nombre='Transferencia Entrada', usuario=usuario)
+        cats_a_excluir = [cat_salida.pk, cat_entrada.pk]
+    except Categoria.DoesNotExist:
+        pass
+        
     # 1. GASTOS TOTALES POR CATEGORÍA (Para Gráfico Circular)
     gastos_totales_por_categoria = Transaccion.objects.filter(
         usuario=usuario,
         tipo='GASTO',
         fecha__year=anio_actual,
         fecha__month=mes_actual
+    ).exclude(
+        categoria__pk__in=cats_a_excluir
     ).values('categoria__nombre').annotate(
         total=Coalesce(Sum('monto'), Decimal(0.00))
     ).order_by('-total')
 
     # 2. Resumen Mensual (Ingresos vs Gastos)
-    resumen_mensual = Transaccion.objects.filter(
+    # Excluimos las transferencias para el resumen mensual también
+    transacciones_base_reporte = Transaccion.objects.filter(
         usuario=usuario,
         fecha__year=anio_actual,
         fecha__month=mes_actual
-    ).aggregate(
+    ).exclude(
+        categoria__pk__in=cats_a_excluir
+    )
+    
+    resumen_mensual_agregado = transacciones_base_reporte.aggregate(
         total_ingresos=Coalesce(Sum('monto', filter=F('tipo') == 'INGRESO'), Decimal(0.00), output_field=DecimalField()),
         total_gastos=Coalesce(Sum('monto', filter=F('tipo') == 'GASTO'), Decimal(0.00), output_field=DecimalField())
     )
     
-    ingresos = resumen_mensual['total_ingresos']
-    gastos = resumen_mensual['total_gastos']
+    ingresos = resumen_mensual_agregado['total_ingresos']
+    gastos = resumen_mensual_agregado['total_gastos']
     flujo_caja_neto = ingresos - gastos
 
     context = {
