@@ -1,147 +1,195 @@
-from django.shortcuts import render
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
-from decimal import Decimal
-from django.contrib.auth.decorators import login_required
-from datetime import date
-import calendar
-import json # Necesario para enviar datos al gráfico de gastos
+{% extends "base.html" %}
+{% load static %}
 
-from .models import Cuenta, Transaccion, Presupuesto
-from .utils import obtener_color_presupuesto
+{% block title %}Resumen Financiero{% endblock %}
 
-@login_required
-def resumen_financiero(request):
-    usuario = request.user
-    hoy = date.today()
-    mes_actual_num = hoy.month
-    anio_actual = hoy.year
-    
-    # Obtener el nombre del mes actual en español (asumiendo que Django ya maneja el locale)
-    mes_actual = calendar.month_name[mes_actual_num] # El nombre del mes en inglés, si necesitas español puro usa un diccionario o el módulo locale
-
-    # 1. SALDOS Y MÉTRICAS GENERALES
-    
-    # Sumar el balance de todas las cuentas
-    saldo_total_neto = Cuenta.objects.filter(usuario=usuario).aggregate(
-        total=Coalesce(Sum('balance'), Decimal(0.00))
-    )['total']
-
-    # Transacciones base del mes actual
-    transacciones_mes_base = Transaccion.objects.filter(
-        usuario=usuario, 
-        fecha__year=anio_actual, 
-        fecha__month=mes_actual_num
-    )
-
-    # Ingresos del mes
-    ingresos_del_mes = transacciones_mes_base.filter(
-        tipo='INGRESO'
-    ).aggregate(
-        total=Coalesce(Sum('monto'), Decimal(0.00))
-    )['total']
-    
-    # Gastos del mes
-    # NOTA: Los gastos y transferencias tienen un signo negativo en la base de datos, 
-    # pero aquí los queremos como valor absoluto para mostrarlos.
-    gastos_del_mes_bruto = transacciones_mes_base.filter(
-        tipo='GASTO'
-    ).aggregate(
-        total=Coalesce(Sum('monto'), Decimal(0.00))
-    )['total']
-    
-    gastos_del_mes = abs(gastos_del_mes_bruto) # Usamos valor absoluto para el display
-
-    # 2. GASTOS POR CATEGORÍA (Para el Gráfico)
-    gastos_por_categoria_queryset = transacciones_mes_base.filter(
-        tipo='GASTO'
-    ).values('categoria__nombre').annotate(
-        total=Coalesce(Sum('monto'), Decimal(0.00))
-    ).order_by('-total') # Ordenamos de mayor a menor gasto
-
-    # Preparar datos para Chart.js
-    chart_labels = [item['categoria__nombre'] for item in gastos_por_categoria_queryset]
-    # Usamos el valor absoluto para las barras del gráfico
-    chart_data_values = [abs(item['total']) for item in gastos_por_categoria_queryset]
-    
-    chart_data = json.dumps({
-        'labels': chart_labels,
-        'data': chart_data_values
-    })
-
-    # 3. PRESUPUESTOS (LA CORRECCIÓN ESTÁ AQUÍ)
-    
-    # 3.1 Obtener todos los presupuestos activos (el QuerySet original)
-    presupuestos_activos = Presupuesto.objects.filter(
-        usuario=usuario, 
-        mes=mes_actual_num, 
-        anio=anio_actual
-    ).select_related('categoria') 
-    
-    resultados_presupuesto = []
-    
-    for presupuesto in presupuestos_activos:
-        # 3.2 Calcular el gasto real para esta categoría
-        gasto_real = transacciones_mes_base.filter(
-            tipo='GASTO',
-            categoria=presupuesto.categoria,
-        ).aggregate(
-            total=Coalesce(Sum('monto'), Decimal(0.00))
-        )['total']
-
-        # Usamos el valor absoluto del gasto
-        gasto_real = abs(gasto_real)
+{% block content %}
+    <div class="container mt-5">
+        <h1 class="mb-4">Panel de Control Financiero</h1>
         
-        # 3.3 Calcular métricas
-        limite = presupuesto.monto
-        porcentaje = (gasto_real / limite) * 100 if limite > 0 else 0
-        restante = limite - gasto_real
+        <div class="alert {{ estado_financiero.tipo }}" role="alert">
+            <i class="{{ estado_financiero.icono }} me-2"></i> <strong>¡Estado!</strong> {{ estado_financiero.mensaje }}
+        </div>
         
-        # 3.4 Determinar el color de la barra (utils.py)
-        color_barra = obtener_color_presupuesto(porcentaje)
+        <div class="row mb-4">
+            <div class="col-lg-4 col-md-6 mb-3">
+                <div class="card text-white bg-primary shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Saldo Total Neto</h5>
+                        <p class="card-text fs-3">${{ saldo_total_neto|floatformat:2 }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-6 mb-3">
+                <div class="card text-white bg-success shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Ingresos de {{ mes_actual }}</h5>
+                        <p class="card-text fs-3">+${{ ingresos_del_mes|floatformat:2 }}</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4 col-md-12 mb-3">
+                <div class="card text-white bg-danger shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Gastos de {{ mes_actual }}</h5>
+                        <p class="card-text fs-3">-${{ gastos_del_mes|floatformat:2 }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h2 class="mt-4 mb-3">📊 Presupuestos del Mes ({{ mes_actual }} {{ anio_actual }})</h2>
+        <div class="row">
+            
+            {% if resultados_presupuesto %}
+                {% for presupuesto in resultados_presupuesto %}
+                    <div class="col-lg-4 col-md-6 mb-4">
+                        <div class="card shadow h-100">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">{{ presupuesto.categoria_nombre }}
+                                    <a href="{% url 'mi_finanzas:editar_presupuesto' presupuesto.pk %}" class="btn btn-sm btn-outline-secondary float-end">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </h5>
+                                
+                                <p class="card-text mb-1 small">
+                                    Límite: **${{ presupuesto.limite|floatformat:2 }}**
+                                </p>
+                                <p class="card-text mb-2 small">
+                                    Gastado: **${{ presupuesto.gastado|floatformat:2 }}**
+                                </p>
+
+                                <div class="progress" style="height: 25px;">
+                                    <div class="progress-bar {{ presupuesto.color_barra }}" role="progressbar" 
+                                         style="width: {{ presupuesto.porcentaje|floatformat:0 }}%" 
+                                         aria-valuenow="{{ presupuesto.porcentaje }}" 
+                                         aria-valuemin="0" aria-valuemax="100">
+                                        {{ presupuesto.porcentaje|floatformat:0 }}%
+                                    </div>
+                                </div>
+                                <p class="card-text mt-2 text-{% if presupuesto.restante < 0 %}danger{% else %}success{% endif %}">
+                                    Restante: **${{ presupuesto.restante|floatformat:2|default:"0.00" }}**
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <div class="col-12">
+                    <div class="alert alert-info shadow-sm">
+                        Aún no has configurado presupuestos para **{{ mes_actual }} {{ anio_actual }}**. 
+                        <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="alert-link">¡Crea uno ahora!</a>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
         
-        # 3.5 Crear el objeto de resultado
-        resultados_presupuesto.append({
-            'pk': presupuesto.pk,
-            'categoria_nombre': presupuesto.categoria.nombre,
-            'limite': limite,
-            'gastado': gasto_real,
-            'porcentaje': porcentaje,
-            'restante': restante,
-            'color_barra': color_barra
-        })
-
-    # 4. OTRAS MÉTRICAS
-    cuentas = Cuenta.objects.filter(usuario=usuario).order_by('nombre')
-    ultimas_transacciones = Transaccion.objects.filter(usuario=usuario).order_by('-fecha')[:5]
-
-    # Lógica del Estado Financiero General (Simplificada)
-    if saldo_total_neto >= 1000 and ingresos_del_mes > gastos_del_mes:
-        estado_financiero = {'mensaje': '¡Excelente! Tu salud financiera es fuerte. Sigue así.', 'tipo': 'alert-success', 'icono': 'fa-check-circle'}
-    elif saldo_total_neto >= 0:
-        estado_financiero = {'mensaje': 'Estás en territorio positivo, pero considera aumentar tus ahorros.', 'tipo': 'alert-warning', 'icono': 'fa-exclamation-triangle'}
-    else:
-        estado_financiero = {'mensaje': 'Tu saldo es negativo. ¡Revisa tus gastos y ajusta tus presupuestos!', 'tipo': 'alert-danger', 'icono': 'fa-times-circle'}
-
-
-    # 5. EL DICCIONARIO DE CONTEXTO CORREGIDO
-    contexto = {
-        'saldo_total_neto': saldo_total_neto,
-        'ingresos_del_mes': ingresos_del_mes,
-        'gastos_del_mes': gastos_del_mes,
-        'mes_actual': mes_actual, 
-        'anio_actual': anio_actual,
+        <div class="row mt-5">
+            <div class="col-lg-6 mb-4">
+                <h2 class="mb-3">💸 Gastos por Categoría ({{ mes_actual }})</h2>
+                <div class="card shadow">
+                    <div class="card-body">
+                        <canvas id="gastosChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-6 mb-4">
+                <h2 class="mb-3">🏦 Cuentas</h2>
+                {% for cuenta in cuentas %}
+                    <div class="card mb-2 shadow-sm">
+                        <div class="card-body d-flex justify-content-between align-items-center py-2">
+                            <span>{{ cuenta.nombre }}</span>
+                            <strong class="text-primary">${{ cuenta.balance|floatformat:2 }}</strong>
+                        </div>
+                    </div>
+                {% endfor %}
+                <div class="d-grid mt-3">
+                    <a href="{% url 'mi_finanzas:cuentas_lista' %}" class="btn btn-outline-primary">Ver todas las cuentas</a>
+                </div>
+            </div>
+        </div>
         
-        'cuentas': cuentas,
-        'gastos_por_categoria': gastos_por_categoria_queryset,
-        'chart_data': chart_data,
-        
-        # ESTA ES LA CLAVE CORREGIDA QUE HACE QUE FUNCIONE
-        'resultados_presupuesto': resultados_presupuesto, 
-        
-        'ultimas_transacciones': ultimas_transacciones,
-        'estado_financiero': estado_financiero,
-    }
+        <h2 class="mt-5 mb-3">📰 Últimas Transacciones</h2>
+        <div class="card shadow mb-5">
+            <ul class="list-group list-group-flush">
+                {% for transaccion in ultimas_transacciones %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ transaccion.descripcion }}</strong>
+                            <small class="text-muted d-block">{{ transaccion.fecha|date:"d M, Y" }} en {{ transaccion.cuenta.nombre }}</small>
+                        </div>
+                        <span class="badge 
+                            {% if transaccion.tipo == 'INGRESO' %}
+                                bg-success
+                            {% elif transaccion.tipo == 'GASTO' %}
+                                bg-danger
+                            {% else %}
+                                bg-secondary
+                            {% endif %}
+                        p-2 fs-6">
+                            {% if transaccion.tipo == 'INGRESO' %}+{% else %}-{% endif %}
+                            ${{ transaccion.monto|floatformat:2 }}
+                        </span>
+                    </li>
+                {% empty %}
+                    <li class="list-group-item text-center text-muted">Aún no hay transacciones recientes.</li>
+                {% endfor %}
+            </ul>
+        </div>
 
-    return render(request, 'mi_finanzas/resumen_financiero.html', contexto)
+    </div>
+{% endblock %}
 
+{% block extra_js %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            // Asegúrate de que chart_data está definido en el contexto de Django
+            const chartDataJson = JSON.parse('{{ chart_data|escapejs }}');
+
+            if (chartDataJson.labels.length > 0) {
+                const ctx = document.getElementById('gastosChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: chartDataJson.labels,
+                        datasets: [{
+                            data: chartDataJson.data,
+                            backgroundColor: [
+                                '#0d6efd', '#dc3545', '#ffc107', '#198754', '#6f42c1', '#20c997', '#fd7e14'
+                            ],
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed !== null) {
+                                            label += '$' + context.parsed.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            } else {
+                // Si no hay datos, muestra un mensaje en lugar del gráfico
+                const chartContainer = document.getElementById('gastosChart').parentNode;
+                chartContainer.innerHTML = '<div class="text-center p-4 text-muted">No hay gastos registrados en este mes para generar el gráfico.</div>';
+            }
+        });
+    </script>
+{% endblock %}
