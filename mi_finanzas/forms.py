@@ -34,8 +34,18 @@ class TransaccionForm(forms.ModelForm):
     
     # CRÍTICO: Constructor para filtrar Cuentas y Categorías por Usuario
     def __init__(self, *args, **kwargs):
+        # 1. Interceptamos 'solicitar' (request) si viene de la vista
+        request = kwargs.pop('solicitar', None) 
+        
+        # 2. Mantenemos el soporte para pasar 'user' directamente (opcional)
         user = kwargs.pop('user', None) 
-        super().__init__(*args, **kwargs) # Llamada al constructor base
+        
+        # 3. Llamada al constructor base SIN 'solicitar' o 'user'
+        super().__init__(*args, **kwargs) 
+
+        # 4. Determinar el usuario si no se pasó directamente
+        if user is None and request and request.user.is_authenticated:
+            user = request.user
 
         if user is not None:
             # Filtra Cuentas y Categorías del usuario
@@ -90,8 +100,18 @@ class TransferenciaForm(forms.Form):
 
     # EL CONSTRUCTOR CRÍTICO para filtrar Cuentas por Usuario
     def __init__(self, *args, **kwargs):
+        # 1. Interceptamos 'solicitar' (request) si viene de la vista
+        request = kwargs.pop('solicitar', None)
+        
+        # 2. Mantenemos el soporte para pasar 'user' directamente (opcional)
         user = kwargs.pop('user', None) 
+        
+        # 3. Llamada al constructor base SIN 'solicitar' o 'user'
         super().__init__(*args, **kwargs) 
+
+        # 4. Determinar el usuario si no se pasó directamente
+        if user is None and request and request.user.is_authenticated:
+            user = request.user
 
         if user is not None:
             cuentas_del_usuario = Cuenta.objects.filter(usuario=user)
@@ -119,7 +139,7 @@ class TransferenciaForm(forms.Form):
 # ----------------------------------------------------
 
 hoy = timezone.localdate()
-MESES_CHOICES = [(i, calendar.month_name[i].capitalize()) for i in range(1, 13)] # Corregido a mayúscula
+MESES_CHOICES = [(i, calendar.month_name[i].capitalize()) for i in range(1, 13)]
 ANIO_CHOICES = [(y, y) for y in range(hoy.year, hoy.year + 5)]
 
 class PresupuestoForm(forms.ModelForm):
@@ -129,14 +149,14 @@ class PresupuestoForm(forms.ModelForm):
         coerce=int,
         initial=hoy.month, 
         label="Mes del Presupuesto",
-        widget=Select(attrs={'class': 'form-select'}) # Aplica estilo aquí
+        widget=Select(attrs={'class': 'form-select'}) 
     )
     anio = forms.TypedChoiceField(
         choices=ANIO_CHOICES,
         coerce=int,
         initial=hoy.year, 
         label="Año del Presupuesto",
-        widget=Select(attrs={'class': 'form-select'}) # Aplica estilo aquí
+        widget=Select(attrs={'class': 'form-select'}) 
     )
     
     class Meta:
@@ -148,8 +168,18 @@ class PresupuestoForm(forms.ModelForm):
         
     # CRÍTICO: Constructor para filtrar Categorías por Usuario
     def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None) # Asumimos que la vista envía 'user'
+        # 1. Interceptamos 'solicitar' (request) si viene de la vista <--- ESTA ES LA CLAVE DE LA CORRECCIÓN
+        request = kwargs.pop('solicitar', None) 
+
+        # 2. Mantenemos el soporte para pasar 'user' directamente (opcional)
+        user = kwargs.pop('user', None) 
+        
+        # 3. Llamada al constructor base SIN 'solicitar' o 'user'
         super().__init__(*args, **kwargs)
+        
+        # 4. Determinar el usuario si no se pasó directamente
+        if user is None and request and request.user.is_authenticated:
+            user = request.user
         
         if user is not None:
             self.fields['categoria'].queryset = Categoria.objects.filter(usuario=user)
@@ -179,3 +209,4 @@ class RegistroUsuarioForm(UserCreationForm):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.widget.attrs.update({'class': 'form-control'})
+
