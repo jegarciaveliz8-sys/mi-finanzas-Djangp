@@ -1,9 +1,9 @@
-
 from django.urls import path
 from . import views
 
 # Define el namespace de la aplicación
-app_name = 'mi_finanzas'
+# CORREGIDO: Cambiado de 'mi_finanzas' a 'presupuestos' para resolver NoReverseMatch.
+app_name = 'presupuestos' 
 
 # LISTA ÚNICA DE URLS
 urlpatterns = [
@@ -12,8 +12,6 @@ urlpatterns = [
     # 1. Rutas de Autenticación (CRÍTICA)
     # =========================================================
     path('registro/', views.RegistroUsuario.as_view(), name='registro'), 
-    # NOTA: Asegúrate de que tu proyecto principal (settings.py) 
-    # tenga definidas las rutas de login/logout por defecto.
     
     # =========================================================
     # 2. Rutas de Vistas Principales (Dashboard y Listados)
@@ -53,3 +51,4 @@ urlpatterns = [
     # =========================================================
     path('reportes/', views.reportes_financieros, name='reportes_financieros'),
 ]
+
