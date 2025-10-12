@@ -151,8 +151,11 @@
         document.addEventListener('DOMContentLoaded', function () {
             // Asegúrate de que chart_data está definido en el contexto de Django
             const chartDataJson = JSON.parse('{{ chart_data|escapejs }}');
+            const chartContainer = document.getElementById('gastosChart').parentNode;
+            const labelsLength = chartDataJson.labels.length;
 
-            if (chartDataJson.labels.length > 0) {
+            // CASO 1: Múltiples categorías (labelsLength > 1)
+            if (labelsLength > 1) {
                 const ctx = document.getElementById('gastosChart').getContext('2d');
                 new Chart(ctx, {
                     type: 'doughnut',
@@ -190,11 +193,26 @@
                     }
                 });
             } else {
-                // Si no hay datos, muestra un mensaje en lugar del gráfico
-                const chartContainer = document.getElementById('gastosChart').parentNode;
-                chartContainer.innerHTML = '<div class="text-center p-4 text-muted">No hay gastos registrados en este mes para generar el gráfico.</div>';
+                // CASO 2 & 3: Cero o una sola categoría. Reemplaza el canvas por un mensaje.
+                let message;
+                let alertClass;
+
+                if (labelsLength === 0) {
+                    // Cero categorías (No hay gastos)
+                    message = 'No hay gastos registrados en este mes para generar el gráfico.';
+                    alertClass = 'alert-info text-muted';
+                } else if (labelsLength === 1) {
+                    // Una sola categoría (Gráfico inútil, mejor mensaje)
+                    const categoria = chartDataJson.labels[0];
+                    const gasto = chartDataJson.data[0].toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                    
+                    message = `Solo hay gastos en la categoría **${categoria}** por $${gasto}. Se necesitan más categorías para un gráfico comparativo.`;
+                    alertClass = 'alert-warning';
+                }
+
+                // Inyecta el mensaje en el contenedor del gráfico
+                chartContainer.innerHTML = `<div class="text-center p-4 alert ${alertClass} shadow-sm">${message}</div>`;
             }
         });
     </script>
 {% endblock %}
-
