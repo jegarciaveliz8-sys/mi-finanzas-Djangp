@@ -34,16 +34,20 @@ class TransaccionForm(forms.ModelForm):
     
     # CRÍTICO: Constructor para filtrar Cuentas y Categorías por Usuario
     def __init__(self, *args, **kwargs):
-        # 1. Interceptamos 'solicitar' (request) si viene de la vista
+        # 1. Interceptamos 'solicitar' si viene de la vista
         request = kwargs.pop('solicitar', None) 
         
-        # 2. Mantenemos el soporte para pasar 'user' directamente (opcional)
+        # 2. Interceptamos 'request' si se pasó (para más robustez)
+        if request is None:
+            request = kwargs.pop('request', None)
+        
+        # 3. Mantenemos el soporte para pasar 'user' directamente (opcional)
         user = kwargs.pop('user', None) 
         
-        # 3. Llamada al constructor base SIN 'solicitar' o 'user'
+        # 4. Llamada al constructor base SIN las claves personalizadas
         super().__init__(*args, **kwargs) 
 
-        # 4. Determinar el usuario si no se pasó directamente
+        # 5. Determinar el usuario si no se pasó directamente
         if user is None and request and request.user.is_authenticated:
             user = request.user
 
@@ -68,7 +72,6 @@ class TransaccionForm(forms.ModelForm):
 # ----------------------------------------------------
 # 3. Formulario de Transferencia (Custom Form)
 # ----------------------------------------------------
-# Nota: Este debe ser un forms.Form simple porque maneja dos Cuentas.
 
 class TransferenciaForm(forms.Form):
     # Definiciones de campos (sin queryset inicial)
@@ -100,16 +103,20 @@ class TransferenciaForm(forms.Form):
 
     # EL CONSTRUCTOR CRÍTICO para filtrar Cuentas por Usuario
     def __init__(self, *args, **kwargs):
-        # 1. Interceptamos 'solicitar' (request) si viene de la vista
+        # 1. Interceptamos 'solicitar' si viene de la vista
         request = kwargs.pop('solicitar', None)
         
-        # 2. Mantenemos el soporte para pasar 'user' directamente (opcional)
+        # 2. Interceptamos 'request' si se pasó (para más robustez)
+        if request is None:
+            request = kwargs.pop('request', None)
+
+        # 3. Mantenemos el soporte para pasar 'user' directamente (opcional)
         user = kwargs.pop('user', None) 
         
-        # 3. Llamada al constructor base SIN 'solicitar' o 'user'
+        # 4. Llamada al constructor base SIN las claves personalizadas
         super().__init__(*args, **kwargs) 
 
-        # 4. Determinar el usuario si no se pasó directamente
+        # 5. Determinar el usuario si no se pasó directamente
         if user is None and request and request.user.is_authenticated:
             user = request.user
 
@@ -168,16 +175,20 @@ class PresupuestoForm(forms.ModelForm):
         
     # CRÍTICO: Constructor para filtrar Categorías por Usuario
     def __init__(self, *args, **kwargs):
-        # 1. Interceptamos 'solicitar' (request) si viene de la vista <--- ESTA ES LA CLAVE DE LA CORRECCIÓN
+        # 1. Interceptamos 'solicitar' si viene de la vista (versión en español)
         request = kwargs.pop('solicitar', None) 
 
-        # 2. Mantenemos el soporte para pasar 'user' directamente (opcional)
+        # 2. Interceptamos 'request' si se pasó (versión en inglés) <--- ¡CORRECCIÓN CLAVE!
+        if request is None: 
+            request = kwargs.pop('request', None)
+
+        # 3. Mantenemos el soporte para pasar 'user' directamente (opcional)
         user = kwargs.pop('user', None) 
         
-        # 3. Llamada al constructor base SIN 'solicitar' o 'user'
+        # 4. Llamada al constructor base SIN las claves personalizadas
         super().__init__(*args, **kwargs)
         
-        # 4. Determinar el usuario si no se pasó directamente
+        # 5. Determinar el usuario para el filtrado
         if user is None and request and request.user.is_authenticated:
             user = request.user
         

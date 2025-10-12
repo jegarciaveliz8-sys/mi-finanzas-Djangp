@@ -526,7 +526,8 @@ def crear_presupuesto(request):
             'anio': timezone.localdate().year,
         }
         # 💡 CORRECCIÓN CRÍTICA: Cambiado user=request.user a request=request
-        form = PresupuestoForm(initial=initial_data, request=request)
+        form = PresupuestoForm(initial=initial_data,  user=request.user) 
+    # ...
         
     context = {
         'form': form,
