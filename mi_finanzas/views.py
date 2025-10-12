@@ -46,6 +46,16 @@ class RegistroUsuario(CreateView):
 
 @login_required
 def resumen_financiero(request):
+    # Importaciones necesarias que deberían estar al inicio de tu archivo:
+    # from django.contrib.auth.decorators import login_required
+    # from django.shortcuts import render
+    # from django.db.models import Sum, DecimalField
+    # from django.db.models.functions import Coalesce
+    # from django.utils import timezone
+    # from decimal import Decimal
+    # import json 
+    # from .models import Cuenta, Transaccion, Presupuesto 
+    
     usuario = request.user
     hoy = timezone.localdate()
     mes_actual = hoy.month
@@ -91,9 +101,10 @@ def resumen_financiero(request):
         'labels': chart_labels,
         'data': chart_data_values
     }
+    # Convertimos a JSON para pasar al JavaScript del template
     chart_data_json = json.dumps(chart_data)
 
-    # --- LÓGICA DE PRESUPUESTOS (Mejorada para usar en plantilla) ---
+    # --- LÓGICA DE PRESUPUESTOS ---
     presupuestos_activos = Presupuesto.objects.filter(
         usuario=usuario, 
         mes=mes_actual, 
@@ -156,20 +167,27 @@ def resumen_financiero(request):
 
     # --- CONTEXTO FINAL ---
     contexto = {
+        # Métricas principales
         'saldo_total_neto': saldo_total_neto,
         'ingresos_del_mes': ingresos_del_mes,
         'gastos_del_mes': gastos_del_mes,
         'mes_actual': hoy.strftime('%B'),
         'anio_actual': anio_actual,
+        
+        # Dashboard Data
         'cuentas': cuentas,
-        'gastos_por_categoria': gastos_por_categoria_qs,
-        'chart_data': chart_data_json,
-        'resultados_presupuesto': presupuestos_activos,
         'ultimas_transacciones': ultimas_transacciones,
         'estado_financiero': estado_financiero,
+        
+        # Datos de gráficos y presupuestos
+        'gastos_por_categoria': gastos_por_categoria_qs,
+        'chart_data_json': chart_data_json, # <--- ¡CORRECCIÓN CLAVE! Nombre consistente para el template
+        'resultados_presupuesto': presupuestos_activos,
     }
     
     return render(request, 'mi_finanzas/resumen_financiero.html', contexto)
+
+
 
 
 # =========================================================
