@@ -1,21 +1,22 @@
 from django.urls import path
 from . import views
 
-# Define el namespace de la aplicación
-# NOTA: Usamos 'presupuestos' porque las plantillas lo referencian así.
-app_name = 'presupuestos' 
+# Define el namespace de la aplicación. Es CRÍTICO que sea consistente.
+# Si tu app se llama 'mi_finanzas', usa 'mi_finanzas' aquí.
+app_name = 'mi_finanzas' 
 
-# LISTA ÚNICA DE URLS
+# LISTA ÚNICA Y COMPLETA DE URLS
 urlpatterns = [
     
     # =========================================================
-    # 1. Rutas de Autenticación (CRÍTICA)
+    # 1. Rutas de Autenticación
     # =========================================================
     path('registro/', views.RegistroUsuario.as_view(), name='registro'), 
     
     # =========================================================
     # 2. Rutas de Vistas Principales (Dashboard y Listados)
     # =========================================================
+    # Dashboard accesible desde la raíz de la app y /resumen/
     path('', views.resumen_financiero, name='resumen_financiero'),
     path('resumen/', views.resumen_financiero, name='resumen_financiero'), 
     path('cuentas/', views.cuentas_lista, name='cuentas_lista'),
@@ -35,34 +36,22 @@ urlpatterns = [
     path('transacciones/<int:pk>/editar/', views.editar_transaccion, name='editar_transaccion'),
     path('transacciones/<int:pk>/eliminar/', views.eliminar_transaccion, name='eliminar_transaccion'),
     
-    # ✅ RUTA DE TRANSFERENCIA
+    # RUTA DE TRANSFERENCIA
     path('transferir/', views.transferir_monto, name='transferir_monto'),
 
     # =========================================================
     # 5. CRUD de Presupuestos
     # =========================================================
-    # 💡 RUTA FALTANTE CORREGIDA: Se añade la URL para listar todos los presupuestos.
     path('presupuestos/', views.presupuestos_lista, name='lista_presupuestos'), 
-    
     path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
-    path('presupuesto/<int:pk>/editar/', views.editar_presupuesto, name='editar_presupuesto'),
     path('presupuesto/<int:pk>/eliminar/', views.eliminar_presupuesto, name='eliminar_presupuesto'),
+    
+    # RUTA DE EDICIÓN DEL PRESUPUESTO (Usando la nueva UpdateView)
+    path('presupuesto/<int:pk>/editar/', views.PresupuestoUpdateView.as_view(), name='editar_presupuesto'),
 
     # =========================================================
     # 6. Reportes
     # =========================================================
     path('reportes/', views.reportes_financieros, name='reportes_financieros'),
-]
-
-from django.urls import path
-from . import views
-
-app_name = 'mi_finanzas'
-
-urlpatterns = [
-    # ... (tus otras URLs)
-    
-    # URL para editar un presupuesto. El <int:pk> captura la ID del presupuesto.
-    path('presupuesto/editar/<int:pk>/', views.PresupuestoUpdateView.as_view(), name='editar_presupuesto'),
 ]
 
