@@ -7,12 +7,12 @@
     <div class="container mt-5">
         <h1 class="mb-4">Panel de Control Financiero</h1>
         
-        <div class="alert {{ estado_financiero.tipo }}" role="alert">
+                <div class="alert {{ estado_financiero.tipo }}" role="alert">
             <i class="{{ estado_financiero.icono }} me-2"></i> <strong>¡Estado!</strong> {{ estado_financiero.mensaje }}
         </div>
         
-        <div class="row mb-4">
-            <div class="col-lg-4 col-md-6 mb-3">
+                <div class="row mb-4">
+                        <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card text-white bg-primary shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Saldo Total Neto</h5>
@@ -20,7 +20,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-lg-4 col-md-6 mb-3">
+                        <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card text-white bg-success shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Ingresos de {{ mes_actual }}</h5>
@@ -28,7 +28,7 @@
                     </div>
                 </div>
             </div>
-            <div class="col-lg-4 col-md-12 mb-3">
+                        <div class="col-lg-4 col-md-12 mb-3">
                 <div class="card text-white bg-danger shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Gastos de {{ mes_actual }}</h5>
@@ -38,7 +38,7 @@
             </div>
         </div>
 
-        <h2 class="mt-4 mb-3">📊 Presupuestos del Mes ({{ mes_actual }} {{ anio_actual }})</h2>
+                <h2 class="mt-4 mb-3">📊 Presupuestos del Mes ({{ mes_actual }} {{ anio_actual }})</h2>
         <div class="row">
             
             {% if resultados_presupuesto %}
@@ -46,17 +46,21 @@
                     <div class="col-lg-4 col-md-6 mb-4">
                         <div class="card shadow h-100">
                             <div class="card-body">
-                                <h5 class="card-title mb-3">{{ presupuesto.categoria_nombre }}
+                                <h5 class="card-title mb-3">
+                                    {# CORRECCIÓN 1: Usar .categoria.nombre #}
+                                    **{{ presupuesto.categoria.nombre }}**
                                     <a href="{% url 'mi_finanzas:editar_presupuesto' presupuesto.pk %}" class="btn btn-sm btn-outline-secondary float-end">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                 </h5>
                                 
                                 <p class="card-text mb-1 small">
-                                    Límite: **${{ presupuesto.limite|floatformat:2 }}**
+                                    {# CORRECCIÓN 2: Usar monto_limite #}
+                                    Límite: **${{ presupuesto.monto_limite|floatformat:2 }}**
                                 </p>
                                 <p class="card-text mb-2 small">
-                                    Gastado: **${{ presupuesto.gastado|floatformat:2 }}**
+                                    {# CORRECCIÓN 3: Usar gasto_actual #}
+                                    Gastado: **${{ presupuesto.gasto_actual|floatformat:2 }}**
                                 </p>
 
                                 <div class="progress" style="height: 25px;">
@@ -84,7 +88,7 @@
             {% endif %}
         </div>
         
-        <div class="row mt-5">
+                <div class="row mt-5">
             <div class="col-lg-6 mb-4">
                 <h2 class="mb-3">💸 Gastos por Categoría ({{ mes_actual }})</h2>
                 <div class="card shadow">
@@ -110,7 +114,7 @@
             </div>
         </div>
         
-        <h2 class="mt-5 mb-3">📰 Últimas Transacciones</h2>
+                <h2 class="mt-5 mb-3">📰 Últimas Transacciones</h2>
         <div class="card shadow mb-5">
             <ul class="list-group list-group-flush">
                 {% for transaccion in ultimas_transacciones %}
@@ -142,7 +146,7 @@
 {% endblock %}
 
 {% block extra_js %}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // Asegúrate de que chart_data está definido en el contexto de Django
@@ -193,3 +197,4 @@
         });
     </script>
 {% endblock %}
+
