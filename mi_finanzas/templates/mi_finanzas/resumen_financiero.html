@@ -43,7 +43,14 @@
         {# Sección de Presupuestos #}
         <h2 class="mt-4 mb-3">📊 Presupuestos del Mes ({{ mes_actual }} {{ anio_actual }})</h2>
         <div class="row">
-            
+        <div class="d-flex justify-content-between align-items-center">
+    <h3 class="mb-0">📊 Presupuestos del Mes (October 2025)</h3>
+    
+    <a href="{% url 'mi_finanzas:crear_presupuesto' %}" 
+       class="btn btn-primary btn-sm">
+        + Nuevo Presupuesto
+    </a>
+</div>    
             {% if resultados_presupuesto %}
                 {% for presupuesto in resultados_presupuesto %}
                     <div class="col-lg-4 col-md-6 mb-4">
