@@ -590,7 +590,7 @@ def editar_presupuesto(request, pk):
         'titulo': f'Editar Presupuesto: {presupuesto.categoria.nombre}'
     }
 
-    return render(request, 'mi_finanzas/editar_presupuesto.html', contexto)
+    return render(request, 'mi_finanzas/presupuesto_editar.html', contexto)
 
 
 @login_required
