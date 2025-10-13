@@ -37,6 +37,14 @@
                                 <i class="fas fa-plus-circle me-1"></i> Añadir Transacción
                             </a>
                         </li>
+                        
+                        {# Nuevo Enlace al Manual del Usuario #}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% static 'mi_finanzas/manual_mifinanzas.pdf' %}" target="_blank">
+                                <i class="fas fa-book me-1"></i> Manual
+                            </a>
+                        </li>
+                        
                     {% endif %}
                 </ul>
                 
@@ -75,4 +83,3 @@
     {% block extra_js %}{% endblock %}
 </body>
 </html>
-
