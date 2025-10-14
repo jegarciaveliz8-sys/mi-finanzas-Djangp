@@ -45,7 +45,9 @@ class RegistroUsuario(CreateView):
 # =========================================================
 # 1. VISTA DE RESUMEN (PANEL DE CONTROL) - ¡CORREGIDA!
 # =========================================================
-
+<button type="button" class="btn btn-primary my-3" data-bs-toggle="modal" data-bs-target="#transferModal">
+    <i class="fas fa-exchange-alt me-2"></i> Realizar Transferencia
+</button>
 @login_required
 def resumen_financiero(request):
     usuario = request.user

@@ -1,0 +1,16 @@
+{% load bootstrap5 %}
+
+<form method="post" action="{% url 'mi_finanzas:transferir_monto' %}">
+    {% csrf_token %}
+
+    {% bootstrap_form form %} 
+    
+    <div class="d-flex justify-content-end gap-2 mt-3">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            Cancelar
+        </button>
+        <button type="submit" class="btn btn-success">
+            Confirmar Transferencia
+        </button>
+    </div>
+</form>
