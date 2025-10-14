@@ -148,3 +148,35 @@ class TransaccionesListView(ListView):
 
 # ... (Si tuvieras más código) ...
 
+
+
+from .models import Cuenta  # Asegúrate de que el modelo Cuenta esté importado
+from .forms import CuentaForm # Necesitas un formulario para crear/añadir cuentas
+from django.urls import reverse_lazy
+
+@login_required
+def anadir_cuenta(request):
+    """Vista para añadir una nueva cuenta de forma funcional."""
+    if request.method == 'POST':
+        # Asume que tienes un formulario llamado CuentaForm
+        form = CuentaForm(request.POST) 
+        if form.is_valid():
+            cuenta = form.save(commit=False)
+            cuenta.usuario = request.user # Asigna la cuenta al usuario logueado
+            cuenta.save()
+            messages.success(request, "¡Cuenta añadida con éxito!")
+            # Redirige a la lista de cuentas
+            return redirect('mi_finanzas:cuentas_lista') 
+    else:
+        form = CuentaForm()
+
+    # Inyecta el formulario de transferencia para el modal de base.html (IMPORTANTE)
+    transferencia_form = TransferenciaForm(user=request.user)
+    
+    context = {
+        'form': transferencia_form,  # Formulario de transferencia
+        'cuenta_form': form         # Formulario principal para añadir la cuenta
+    }
+
+    # Asume que tienes una plantilla para este formulario
+    return render(request, 'mi_finanzas/anadir_cuenta.html', context)
