@@ -303,3 +303,43 @@ def editar_transaccion(request, pk):
 
     # Asume que tienes una plantilla para este formulario
     return render(request, 'mi_finanzas/editar_transaccion.html', context)
+
+
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db import transaction
+# Asegúrate de importar el modelo Transaccion
+
+@login_required
+@transaction.atomic
+def eliminar_transaccion(request, pk):
+    """Vista para eliminar una transacción y revertir su efecto en el saldo de la cuenta."""
+    # 1. Recuperar la transacción o devolver 404
+    transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
+    
+    # Solo permitimos la eliminación a través de POST para seguridad
+    if request.method == 'POST':
+        cuenta = transaccion.cuenta
+        monto = transaccion.monto # El monto puede ser positivo (INGRESO) o negativo (EGRESO)
+        
+        # Lógica de Reversión (CRÍTICA):
+        # Para revertir la transacción, sumamos el monto a la cuenta.
+        # Si el monto era +50 (ingreso), sumamos -50, lo cual es restar 50.
+        # Si el monto era -50 (egreso), sumamos +50, lo cual es sumar 50.
+        cuenta.saldo -= monto
+        
+        # 2. Guardar los cambios y eliminar
+        cuenta.save()
+        transaccion.delete()
+        
+        messages.success(request, "¡Transacción eliminada y saldo ajustado con éxito!")
+        return redirect('mi_finanzas:transacciones_lista')
+    
+    # Si la solicitud no es POST (por seguridad, pedimos confirmación)
+    context = {
+        'transaccion': transaccion
+    }
+    # Asume que tienes una plantilla para la confirmación
+    return render(request, 'mi_finanzas/eliminar_transaccion_confirm.html', context)
+
