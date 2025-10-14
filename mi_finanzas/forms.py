@@ -1,10 +1,11 @@
 from django import forms
-from .models import Cuenta, Transaccion, Categoria, Presupuesto
 from django.forms.widgets import TextInput, NumberInput, Select, Textarea, DateInput
 from django.utils import timezone
 import calendar 
-from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth import get_user_model
+
+# Importaciones de Modelos (Asegúrate de que estos modelos existan en models.py)
+from .models import Cuenta, Transaccion, Categoria, Presupuesto 
 
 User = get_user_model() 
 
@@ -15,6 +16,8 @@ User = get_user_model()
 class CuentaForm(forms.ModelForm):
     class Meta:
         model = Cuenta
+        # Nota: El campo 'balance' es ahora 'saldo' en muchos proyectos de finanzas. 
+        # Lo mantengo como 'balance' basándome en tu código original, pero revísalo.
         fields = ['nombre', 'tipo', 'balance'] 
         widgets = {
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Principal'}),
@@ -32,15 +35,13 @@ class TransaccionForm(forms.ModelForm):
         widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
     )
     
-    # CRÍTICO: Constructor para filtrar Cuentas y Categorías por Usuario
     def __init__(self, *args, **kwargs):
-        # Usamos 'request' como nombre estandarizado para obtener el usuario
+        # Acepta 'user' o 'request' para filtrar querysets
         request = kwargs.pop('request', None) 
         user = kwargs.pop('user', None) 
         
         super().__init__(*args, **kwargs) 
 
-        # Determinar el usuario si no se pasó directamente
         if user is None and request and request.user.is_authenticated:
             user = request.user
 
@@ -67,14 +68,13 @@ class TransaccionForm(forms.ModelForm):
 # ----------------------------------------------------
 
 class TransferenciaForm(forms.Form):
-    # Definiciones de campos (sin queryset inicial)
     cuenta_origen = forms.ModelChoiceField(
-        queryset=Cuenta.objects.none(), # Se inicializa a none
+        queryset=Cuenta.objects.none(),
         label="Cuenta de Origen",
         empty_label="Selecciona una cuenta..."
     )
     cuenta_destino = forms.ModelChoiceField(
-        queryset=Cuenta.objects.none(), # Se inicializa a none
+        queryset=Cuenta.objects.none(),
         label="Cuenta de Destino",
         empty_label="Selecciona una cuenta..."
     )
@@ -94,15 +94,12 @@ class TransferenciaForm(forms.Form):
         widget=TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Ahorros a Inversión'})
     )
 
-    # EL CONSTRUCTOR CRÍTICO para filtrar Cuentas por Usuario
     def __init__(self, *args, **kwargs):
-        # Usamos 'request' como nombre estandarizado para obtener el usuario
         request = kwargs.pop('request', None)
         user = kwargs.pop('user', None) 
         
         super().__init__(*args, **kwargs) 
 
-        # Determinar el usuario si no se pasó directamente
         if user is None and request and request.user.is_authenticated:
             user = request.user
 
@@ -111,11 +108,9 @@ class TransferenciaForm(forms.Form):
             self.fields['cuenta_origen'].queryset = cuentas_del_usuario
             self.fields['cuenta_destino'].queryset = cuentas_del_usuario
             
-        # Aplicar estilo Bootstrap a los ModelChoiceFields
         self.fields['cuenta_origen'].widget.attrs.update({'class': 'form-select'})
         self.fields['cuenta_destino'].widget.attrs.update({'class': 'form-select'})
         
-    # Lógica de validación: Las cuentas no pueden ser la misma
     def clean(self):
         cleaned_data = super().clean()
         origen = cleaned_data.get('cuenta_origen')
@@ -159,56 +154,42 @@ class PresupuestoForm(forms.ModelForm):
             'monto_limite': NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01', 'placeholder': 'Ej: 500.00'}),
         }
         
-    # CRÍTICO: Constructor para filtrar Categorías por Usuario
     def __init__(self, *args, **kwargs):
-        # Usamos 'request' como nombre estandarizado para obtener el usuario
         request = kwargs.pop('request', None) 
         user = kwargs.pop('user', None) 
         
         super().__init__(*args, **kwargs)
         
-        # Determinar el usuario para el filtrado
         if user is None and request and request.user.is_authenticated:
             user = request.user
         
         if user is not None:
             self.fields['categoria'].queryset = Categoria.objects.filter(usuario=user)
-            self.fields['categoria'].widget.attrs.update({'class': 'form-select'}) # Aplica estilo
+            self.fields['categoria'].widget.attrs.update({'class': 'form-select'})
 
 # ----------------------------------------------------
-# 4.1 Formulario para EDITAR Presupuesto (Actualización)
+# 5. Formulario de Categorías (CRUD) 🔑 AÑADIDO
 # ----------------------------------------------------
 
-class PresupuestoUpdateForm(forms.ModelForm):
-    class Meta:
-        model = Presupuesto
-        # Solo permite la edición del monto límite
-        fields = ['monto_limite']
-        widgets = {
-            'monto_limite': NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01'}),
-        }
-        
-# ----------------------------------------------------
-# 5. Formulario de Login y Registro
-# ----------------------------------------------------
-
-class LoginForm(forms.Form):
-    username = forms.CharField(
-        label='Nombre de usuario',
-        max_length=150,
-        widget=TextInput(attrs={'class': 'form-control', 'placeholder': 'Usuario'})
-    )
-    password = forms.CharField(
-        label='Contraseña',
-        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Contraseña'})
-    )
-
-class RegistroUsuarioForm(UserCreationForm):
-    class Meta(UserCreationForm.Meta):
-        model = User
-        fields = UserCreationForm.Meta.fields + ('email',) 
+class CategoriaForm(forms.ModelForm):
+    """Formulario para la creación y edición de categorías."""
     
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Aplicar estilo Bootstrap a los campos
         for field in self.fields.values():
-            field.widget.attrs.update({'class': 'form-control'})
+            if field.widget.__class__ in [Select, forms.Select]:
+                field.widget.attrs.update({'class': 'form-select'})
+            elif field.widget.__class__ in [TextInput, forms.TextInput]:
+                 field.widget.attrs.update({'class': 'form-control'})
+
+    class Meta:
+        model = Categoria
+        # Asumiendo que el modelo Categoria tiene los campos 'nombre' y 'tipo'
+        fields = ('nombre', 'tipo') 
+        
+        widgets = {
+            'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Alimentación'}),
+            'tipo': Select(attrs={'class': 'form-select'}),
+        }
+
