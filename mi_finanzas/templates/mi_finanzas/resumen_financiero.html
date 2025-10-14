@@ -6,12 +6,15 @@
 {% block content %}
     <div class="container mt-5">
         <h1 class="mb-4">Panel de Control Financiero</h1>
-        
+
+        <button type="button" class="btn btn-primary mb-4" data-bs-toggle="modal" data-bs-target="#transferModal">
+            <i class="fas fa-exchange-alt me-2"></i> Realizar Transferencia
+        </button>
         {# Alerta de Salud Financiera #}
         <div class="alert {{ estado_financiero.tipo }}" role="alert">
             <i class="{{ estado_financiero.icono }} me-2"></i> <strong>¡Estado!</strong> {{ estado_financiero.mensaje }}
         </div>
-        
+       
         {# Métricas Principales (Saldo, Ingresos, Gastos) #}
         <div class="row mb-4">
             <div class="col-lg-4 col-md-6 mb-3">
@@ -50,7 +53,7 @@
        class="btn btn-primary btn-sm">
         + Nuevo Presupuesto
     </a>
-</div>    
+</div>        
             {% if resultados_presupuesto %}
                 {% for presupuesto in resultados_presupuesto %}
                     <div class="col-lg-4 col-md-6 mb-4">
@@ -142,7 +145,7 @@
                                 bg-secondary
                             {% endif %}
                         p-2 fs-6">
-                            {% if transaccion.tipo == 'INGRESO' %}+{% else %}-{% endif %}
+                            {% if transaccion.tipo == 'INGRESO' or transaccion.tipo == 'TRANSFERENCIA_RECIBIDA' %}+{% else %}-{% endif %}
                             ${{ transaccion.monto|floatformat:2 }}
                         </span>
                     </li>
@@ -216,7 +219,7 @@
                     const categoria = chartDataJson.labels[0];
                     const gasto = chartDataJson.data[0].toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
                     
-                    message = `Solo hay gastos en la categoría **${categoria}** por $${gasto}. Se necesitan más categorías para un gráfico comparativo.`;
+                    message = `Solo hay gastos en la categoría <strong>${categoria}</strong> por $${gasto}. Se necesitan más categorías para un gráfico comparativo.`;
                     alertClass = 'alert-warning';
                 }
 
@@ -226,7 +229,3 @@
         });
     </script>
 {% endblock %}
-
-<button type="button" class="btn btn-primary my-3" data-bs-toggle="modal" data-bs-target="#transferModal">
-<i class="fas fa-exchange-alt me-2"></i> Realizar Transferencia
-</button>
