@@ -2,8 +2,7 @@ site_name: Manual de Usuario - MiFinanzas
 site_description: Guía completa para el uso de la aplicación de gestión financiera.
 repo_url: 
 
-theme:
-  name: material
+theme: readthedocs # ¡Usamos un tema reconocido por defecto para solucionar el error!
   
 nav:
   - Inicio: docs/manual_de_usuario.md
