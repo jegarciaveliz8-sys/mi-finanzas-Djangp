@@ -1,6 +1,6 @@
 from django.urls import path
 from . import views
-from django.views.generic import TemplateView # <-- 1. Importación necesaria para servir el manual
+from django.views.generic import TemplateView
 
 # Define el namespace de la aplicación.
 app_name = 'mi_finanzas' 
@@ -19,11 +19,13 @@ urlpatterns = [
     # Dashboard accesible desde la raíz de la app y /resumen/
     path('', views.resumen_financiero, name='resumen_financiero'),
     path('resumen/', views.resumen_financiero, name='resumen_financiero'), 
-    path('cuentas/', views.cuentas_lista, name='cuentas_lista'),
+    
+    # 🛑 CORRECCIÓN CLAVE: La vista CuentasListView debe usar .as_view()
+    path('cuentas/', views.CuentasListView.as_view(), name='cuentas_lista'),
+    
     path('transacciones/lista/', views.transacciones_lista, name='transacciones_lista'), 
     
-    # NUEVA RUTA DEL MANUAL (Sección 2)
-    # Usa TemplateView para servir el index.html que creamos con MkDocs.
+    # RUTA DEL MANUAL
     path('manual/', TemplateView.as_view(template_name='manual_html/index.html'), name='manual_page'),
     
     # =========================================================
@@ -58,3 +60,4 @@ urlpatterns = [
     # =========================================================
     path('reportes/', views.reportes_financieros, name='reportes_financieros'),
 ]
+
