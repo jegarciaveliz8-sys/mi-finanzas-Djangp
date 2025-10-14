@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from django.views.generic import TemplateView # <-- 1. Importación necesaria para servir el manual
 
 # Define el namespace de la aplicación.
 app_name = 'mi_finanzas' 
@@ -20,6 +21,10 @@ urlpatterns = [
     path('resumen/', views.resumen_financiero, name='resumen_financiero'), 
     path('cuentas/', views.cuentas_lista, name='cuentas_lista'),
     path('transacciones/lista/', views.transacciones_lista, name='transacciones_lista'), 
+    
+    # NUEVA RUTA DEL MANUAL (Sección 2)
+    # Usa TemplateView para servir el index.html que creamos con MkDocs.
+    path('manual/', TemplateView.as_view(template_name='manual_html/index.html'), name='manual_page'),
     
     # =========================================================
     # 3. CRUD de Cuentas
@@ -45,8 +50,7 @@ urlpatterns = [
     path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
     path('presupuesto/<int:pk>/eliminar/', views.eliminar_presupuesto, name='eliminar_presupuesto'),
     
-    # RUTA DE EDICIÓN DEL PRESUPUESTO - ¡CORREGIDA!
-    # Ahora apunta a la función 'views.editar_presupuesto' para evitar el AttributeError.
+    # RUTA DE EDICIÓN DEL PRESUPUESTO
     path('presupuesto/<int:pk>/editar/', views.editar_presupuesto, name='editar_presupuesto'),
 
     # =========================================================
