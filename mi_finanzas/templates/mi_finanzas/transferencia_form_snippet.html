@@ -2,8 +2,36 @@
 
 <form method="post" action="{% url 'mi_finanzas:transferir_monto' %}">
     {% csrf_token %}
+    
+    {# La clase 'row' inicia una nueva fila de la cuadrícula de Bootstrap #}
+    <div class="row">
+        
+        {# Columna 1: Ocupa la mitad del ancho (6/12) en pantallas medianas y grandes #}
+        <div class="col-md-6">
+            {% bootstrap_field form.cuenta_origen %}
+        </div>
+        
+        {# Columna 2: Ocupa la otra mitad del ancho #}
+        <div class="col-md-6">
+            {% bootstrap_field form.cuenta_destino %}
+        </div>
+    </div>
 
-    {% bootstrap_form form %} 
+    <div class="row">
+        <div class="col-md-6">
+            {% bootstrap_field form.monto %}
+        </div>
+        <div class="col-md-6">
+            {% bootstrap_field form.fecha %}
+        </div>
+    </div>
+
+    <div class="row">
+        {# La descripción ocupa todo el ancho (12/12) #}
+        <div class="col-12">
+            {% bootstrap_field form.descripcion %}
+        </div>
+    </div>
     
     <div class="d-flex justify-content-end gap-2 mt-3">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -14,3 +42,4 @@
         </button>
     </div>
 </form>
+
