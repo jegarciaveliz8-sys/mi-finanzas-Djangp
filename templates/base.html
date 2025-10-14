@@ -38,9 +38,9 @@
                             </a>
                         </li>
                         
-                        {# Nuevo Enlace al Manual del Usuario (TEMPORALMENTE APUNTANDO A HTML) #}
+                        {# Enlace al Manual del Usuario (CORREGIDO) #}
                         <li class="nav-item">
-                            <a class="nav-link" href="{% static 'mi_finanzas/manual_prueba.html' %}" target="_blank">
+                            <a class="nav-link" href="{% url 'mi_finanzas:manual_page' %}" target="_blank"> 
                                 <i class="fas fa-book me-1"></i> Manual
                             </a>
                         </li>
@@ -83,3 +83,4 @@
     {% block extra_js %}{% endblock %}
 </body>
 </html>
+
