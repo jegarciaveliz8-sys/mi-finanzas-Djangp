@@ -47,7 +47,7 @@ INSTALLED_APPS = [
 	'debug_toolbar', 
 	
 	# ✅ Necesario para resolver el ModuleNotFoundError
-	'bootstrap5', 
+	'django_bootstrap5', 
 
 	'crispy_bootstrap5',
 	# Herramientas de terceros
