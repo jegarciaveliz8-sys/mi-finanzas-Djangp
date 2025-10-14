@@ -1,51 +1,59 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.views.generic import ListView, CreateView # Añadido CreateView
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import UserCreationForm # Añadido UserCreationForm
+from django.contrib.auth.forms import UserCreationForm 
 from django.utils.decorators import method_decorator
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db import transaction
 from django.db.models import Sum
+from django.db.models.functions import Coalesce
+from datetime import date
+from dateutil.relativedelta import relativedelta
 
-# Importaciones de Modelos y Formularios (Ajusta según tus nombres reales)
-from .models import Cuenta, Transaccion
-from .forms import TransferenciaForm, TransaccionForm 
+# ========================================================
+# 🔑 IMPORTACIONES CONSOLIDADAS DE MODELOS Y FORMULARIOS
+# ========================================================
+from .models import Cuenta, Transaccion, Presupuesto, Categoria # Asegúrate de que Categoria exista si se usa
+from .forms import TransferenciaForm, TransaccionForm, CuentaForm, PresupuestoForm, CategoriaForm 
+
 
 # ========================================================
 # VISTAS DE AUTENTICACIÓN
 # ========================================================
 
-# 🔑 ESTO RESUELVE EL IMPORTERROR
 class RegistroUsuario(CreateView):
     """Vista para el registro de nuevos usuarios."""
-    # Utiliza el formulario básico de creación de usuario de Django
     form_class = UserCreationForm 
-    
-    # Redirige al login después de un registro exitoso
     success_url = reverse_lazy('auth:login') 
-    
-    # Especifica la plantilla para el formulario de registro
     template_name = 'registration/signup.html' 
 
 # ========================================================
-# VISTAS DE LISTAS Y RESUMEN
+# VISTAS DE LISTAS Y RESUMEN (Dashboard)
 # ========================================================
 
 @login_required
 def resumen_financiero(request):
-    """Muestra el resumen financiero principal."""
+    """Muestra el resumen financiero principal (Dashboard)."""
     cuentas = Cuenta.objects.filter(usuario=request.user)
     
     # Cálculo simple del saldo total
-    saldo_total = cuentas.aggregate(total=Sum('saldo'))['total'] or 0.00
+    # Coalesce se usa para asegurar que devuelva 0.00 si no hay cuentas
+    saldo_total = cuentas.aggregate(total=Coalesce(Sum('saldo'), 0.00))['total'] 
     
-    # PASO CLAVE: Instanciar y añadir el formulario de transferencia para el modal
+    # Obtener el presupuesto activo (ejemplo)
+    presupuestos_activos = Presupuesto.objects.filter(
+        usuario=request.user, 
+        fecha_inicio__lte=date.today(),
+        fecha_fin__gte=date.today()
+    ).first()
+    
     transferencia_form = TransferenciaForm(user=request.user)
     
     context = {
         'cuentas': cuentas,
         'saldo_total': saldo_total,
+        'presupuesto_activo': presupuestos_activos,
         'form': transferencia_form,  # ¡Inyectado para el modal!
     }
     return render(request, 'mi_finanzas/resumen_financiero.html', context)
@@ -59,17 +67,23 @@ class CuentasListView(ListView):
     context_object_name = 'cuentas'
 
     def get_queryset(self):
-        # Asegura que solo se muestren las cuentas del usuario actual
         return Cuenta.objects.filter(usuario=self.request.user)
 
     def get_context_data(self, **kwargs):
-        # Llama a la implementación base
         context = super().get_context_data(**kwargs)
-        
-        # PASO CLAVE: Inyectar la instancia del formulario de transferencia.
         context['form'] = TransferenciaForm(user=self.request.user)
-        
         return context
+
+@method_decorator(login_required, name='dispatch')
+class TransaccionesListView(ListView):
+    """Muestra la lista de transacciones del usuario."""
+    model = Transaccion 
+    template_name = 'mi_finanzas/transacciones_lista.html' 
+    context_object_name = 'transacciones'
+
+    def get_queryset(self):
+        # Filtra las transacciones solo para el usuario actual y las ordena por fecha
+        return Transaccion.objects.filter(usuario=self.request.user).order_by('-fecha', '-hora')
 
 # ========================================================
 # VISTA DE TRANSFERENCIA (Lógica de Negocio)
@@ -118,59 +132,23 @@ def transferir_monto(request):
     return redirect('mi_finanzas:resumen_financiero')
 
 # ========================================================
-# VISTAS VARIAS (Ejemplo de inyección de formulario)
+# VISTAS DE CUENTAS (CRUD)
 # ========================================================
-
-@login_required
-def anadir_transaccion(request):
-    """Ejemplo de otra vista que debe inyectar el form de transferencia."""
-    
-    # Asegurando el modal de transferencia aquí también
-    transferencia_form = TransferenciaForm(user=request.user)
-
-    context = {
-        'transaccion_form': TransaccionForm(),
-        'form': transferencia_form, # ¡Inyectado!
-    }
-    return render(request, 'mi_finanzas/anadir_transaccion.html', context)
-
-
-@method_decorator(login_required, name='dispatch')
-class TransaccionesListView(ListView):
-    """Muestra la lista de transacciones del usuario."""
-    model = Transaccion 
-    template_name = 'mi_finanzas/transacciones_lista.html' 
-    context_object_name = 'transacciones'
-
-    def get_queryset(self):
-        # Filtra las transacciones solo para el usuario actual y las ordena por fecha
-        return Transaccion.objects.filter(usuario=self.request.user).order_by('-fecha')
-
-# ... (Si tuvieras más código) ...
-
-
-
-from .models import Cuenta  # Asegúrate de que el modelo Cuenta esté importado
-from .forms import CuentaForm # Necesitas un formulario para crear/añadir cuentas
-from django.urls import reverse_lazy
 
 @login_required
 def anadir_cuenta(request):
     """Vista para añadir una nueva cuenta de forma funcional."""
     if request.method == 'POST':
-        # Asume que tienes un formulario llamado CuentaForm
         form = CuentaForm(request.POST) 
         if form.is_valid():
             cuenta = form.save(commit=False)
-            cuenta.usuario = request.user # Asigna la cuenta al usuario logueado
+            cuenta.usuario = request.user 
             cuenta.save()
             messages.success(request, "¡Cuenta añadida con éxito!")
-            # Redirige a la lista de cuentas
             return redirect('mi_finanzas:cuentas_lista') 
     else:
         form = CuentaForm()
 
-    # Inyecta el formulario de transferencia para el modal de base.html (IMPORTANTE)
     transferencia_form = TransferenciaForm(user=request.user)
     
     context = {
@@ -178,34 +156,22 @@ def anadir_cuenta(request):
         'cuenta_form': form         # Formulario principal para añadir la cuenta
     }
 
-    # Asume que tienes una plantilla para este formulario
     return render(request, 'mi_finanzas/anadir_cuenta.html', context)
-
-
-from django.shortcuts import get_object_or_404 # Asegúrate de que esta importación esté al inicio
-from django.contrib import messages
-from django.shortcuts import redirect
-# Asegúrate de importar Cuenta, CuentaForm y TransferenciaForm
 
 @login_required
 def editar_cuenta(request, pk):
     """Vista para editar una cuenta existente."""
-    # 1. Recuperar la cuenta o devolver 404 si no existe
-    # Asegúrate de que solo se editen las cuentas del usuario actual
     cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
 
     if request.method == 'POST':
-        # 2. Rellenar el formulario con los datos POST y la instancia de la cuenta
         form = CuentaForm(request.POST, instance=cuenta) 
         if form.is_valid():
             form.save()
             messages.success(request, f"La cuenta '{cuenta.nombre}' ha sido actualizada.")
             return redirect('mi_finanzas:cuentas_lista') 
     else:
-        # 3. Mostrar el formulario precargado con los datos de la cuenta
         form = CuentaForm(instance=cuenta)
 
-    # 4. Inyectar el formulario de transferencia para el modal (siempre necesario)
     transferencia_form = TransferenciaForm(user=request.user)
     
     context = {
@@ -214,152 +180,245 @@ def editar_cuenta(request, pk):
         'cuenta': cuenta
     }
 
-    # Asume que tienes una plantilla llamada 'mi_finanzas/editar_cuenta.html'
     return render(request, 'mi_finanzas/editar_cuenta.html', context)
-
-from django.shortcuts import get_object_or_404, redirect
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.db import transaction # Recomendado para operaciones de eliminación sensibles
-# Asegúrate de importar Cuenta
 
 @login_required
 @transaction.atomic
 def eliminar_cuenta(request, pk):
     """Vista para eliminar una cuenta existente."""
-    # 1. Recuperar la cuenta o devolver 404
     cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
 
     if request.method == 'POST':
-        # 2. Verificar que el saldo sea cero antes de eliminar (Buena práctica de negocio)
         if cuenta.saldo != 0:
-            messages.error(request, f"No se puede eliminar la cuenta '{cuenta.nombre}' porque su saldo no es cero. Transfiere los fondos primero.")
+            messages.error(request, f"No se puede eliminar la cuenta '{cuenta.nombre}' porque su saldo no es cero.")
             return redirect('mi_finanzas:cuentas_lista')
             
-        # 3. Si el saldo es cero, eliminar la cuenta
-        nombre_cuenta = cuenta.nombre # Guardamos el nombre antes de la eliminación
+        nombre_cuenta = cuenta.nombre 
         cuenta.delete()
         messages.success(request, f"La cuenta '{nombre_cuenta}' ha sido eliminada con éxito.")
         return redirect('mi_finanzas:cuentas_lista')
     
-    # 4. Si es GET, simplemente se debería mostrar un formulario de confirmación 
-    # (aunque si se accede directamente por POST, funciona)
-    # Asume que tienes una plantilla para la confirmación
+    # Si es GET, mostrar formulario de confirmación
     return render(request, 'mi_finanzas/eliminar_cuenta_confirm.html', {'cuenta': cuenta}) 
 
+# ========================================================
+# VISTAS DE TRANSACCIONES (CRUD)
+# ========================================================
 
-from django.shortcuts import get_object_or_404, redirect
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.db import transaction
-# Asegúrate de que los modelos y formularios (Transaccion, TransaccionForm) estén importados
+@login_required
+def anadir_transaccion(request):
+    """Vista para añadir una nueva transacción."""
+    if request.method == 'POST':
+        # Necesitamos el usuario para filtrar las cuentas en el formulario
+        form = TransaccionForm(request.POST, user=request.user) 
+        if form.is_valid():
+            transaccion = form.save(commit=False)
+            transaccion.usuario = request.user
+            
+            # Ajustar saldo de la cuenta
+            cuenta = transaccion.cuenta
+            cuenta.saldo += transaccion.monto # Si es egreso, monto es negativo, por lo que resta
+            cuenta.save()
+            
+            transaccion.save()
+            messages.success(request, "¡Transacción añadida con éxito!")
+            return redirect('mi_finanzas:transacciones_lista')
+    else:
+        form = TransaccionForm(user=request.user)
+
+    transferencia_form = TransferenciaForm(user=request.user)
+    
+    context = {
+        'form': transferencia_form,
+        'transaccion_form': form,
+    }
+    return render(request, 'mi_finanzas/anadir_transaccion.html', context)
+
 
 @login_required
 @transaction.atomic
 def editar_transaccion(request, pk):
     """Vista para editar una transacción existente."""
-    # 1. Recuperar la transacción o devolver 404
     transaccion_antigua = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
-    
-    # Guardamos el monto original de la transacción antes de cualquier cambio.
     monto_original = transaccion_antigua.monto
     
     if request.method == 'POST':
-        # 2. Rellenar el formulario con los datos POST y la instancia de la transacción antigua
-        # Asume que tienes un formulario llamado TransaccionForm
-        form = TransaccionForm(request.POST, instance=transaccion_antigua) 
+        # Usamos el argumento user para filtrar cuentas en el formulario
+        form = TransaccionForm(request.POST, instance=transaccion_antigua, user=request.user) 
         
         if form.is_valid():
-            # 3. Guardar la nueva transacción (aún sin persistir en la DB)
             transaccion_nueva = form.save(commit=False)
             monto_nuevo = transaccion_nueva.monto
             
             # Lógica de ajuste de saldos (CRÍTICA)
-            # a. Deshacer el impacto del monto original en la cuenta
             cuenta = transaccion_antigua.cuenta
-            cuenta.saldo += monto_original
             
-            # b. Aplicar el impacto del monto nuevo en la cuenta
-            cuenta.saldo -= monto_nuevo # Si el monto es negativo, se convierte en suma
+            # 1. Deshacer el impacto del monto original
+            cuenta.saldo -= monto_original
             
-            # 4. Guardar los cambios
+            # 2. Aplicar el impacto del monto nuevo
+            cuenta.saldo += monto_nuevo
+            
+            # 3. Guardar los cambios
             cuenta.save()
-            transaccion_nueva.save() # Guarda la transacción actualizada
+            transaccion_nueva.save() 
             
             messages.success(request, "¡Transacción actualizada con éxito!")
             return redirect('mi_finanzas:transacciones_lista') 
     else:
-        # 5. Mostrar el formulario precargado con los datos de la transacción
-        form = TransaccionForm(instance=transaccion_antigua)
+        form = TransaccionForm(instance=transaccion_antigua, user=request.user)
 
-    # 6. Inyectar el formulario de transferencia para el modal de base.html
     transferencia_form = TransferenciaForm(user=request.user)
     
     context = {
-        'form': transferencia_form,       # Formulario de transferencia
-        'transaccion_form': form,         # Formulario principal para editar
+        'form': transferencia_form,
+        'transaccion_form': form,
         'transaccion': transaccion_antigua
     }
 
-    # Asume que tienes una plantilla para este formulario
     return render(request, 'mi_finanzas/editar_transaccion.html', context)
 
-
-from django.shortcuts import get_object_or_404, redirect
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.db import transaction
-# Asegúrate de importar el modelo Transaccion
 
 @login_required
 @transaction.atomic
 def eliminar_transaccion(request, pk):
     """Vista para eliminar una transacción y revertir su efecto en el saldo de la cuenta."""
-    # 1. Recuperar la transacción o devolver 404
     transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
     
-    # Solo permitimos la eliminación a través de POST para seguridad
     if request.method == 'POST':
         cuenta = transaccion.cuenta
-        monto = transaccion.monto # El monto puede ser positivo (INGRESO) o negativo (EGRESO)
+        monto = transaccion.monto 
         
-        # Lógica de Reversión (CRÍTICA):
-        # Para revertir la transacción, sumamos el monto a la cuenta.
-        # Si el monto era +50 (ingreso), sumamos -50, lo cual es restar 50.
-        # Si el monto era -50 (egreso), sumamos +50, lo cual es sumar 50.
+        # Lógica de Reversión: Restamos el impacto (si era -50 (egreso), restar -50 es sumar 50)
         cuenta.saldo -= monto
         
-        # 2. Guardar los cambios y eliminar
         cuenta.save()
         transaccion.delete()
         
         messages.success(request, "¡Transacción eliminada y saldo ajustado con éxito!")
         return redirect('mi_finanzas:transacciones_lista')
     
-    # Si la solicitud no es POST (por seguridad, pedimos confirmación)
     context = {
         'transaccion': transaccion
     }
-    # Asume que tienes una plantilla para la confirmación
     return render(request, 'mi_finanzas/eliminar_transaccion_confirm.html', context)
 
 
-from django.views.generic import ListView
-# Asegúrate de importar tu modelo Presupuesto
-# from .models import Presupuesto 
-from django.utils.decorators import method_decorator
-from django.contrib.auth.decorators import login_required
+# ========================================================
+# VISTAS DE PRESUPUESTOS (CRUD)
+# ========================================================
 
-# Coloca esta clase junto a CuentasListView y TransaccionesListView
 @method_decorator(login_required, name='dispatch')
 class PresupuestosListView(ListView):
     """Muestra la lista de presupuestos del usuario."""
-    # Asume que tienes un modelo llamado Presupuesto
     model = Presupuesto 
     template_name = 'mi_finanzas/presupuestos_lista.html' 
     context_object_name = 'presupuestos'
 
     def get_queryset(self):
-        # Filtra los presupuestos solo para el usuario actual
-        return Presupuesto.objects.filter(usuario=self.request.user).order_by('fecha_inicio')
+        # Ordenar por fecha de inicio descendente
+        return Presupuesto.objects.filter(usuario=self.request.user).order_by('-fecha_inicio')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['form'] = TransferenciaForm(user=self.request.user)
+        return context
 
+
+@login_required
+def crear_presupuesto(request):
+    """Vista para crear un nuevo presupuesto."""
+    if request.method == 'POST':
+        form = PresupuestoForm(request.POST, user=request.user) 
+        if form.is_valid():
+            presupuesto = form.save(commit=False)
+            presupuesto.usuario = request.user
+            presupuesto.save()
+            # Guardar categorías (asumiendo que PresupuestoForm tiene manejo de categorías)
+            form.save_m2m() 
+            messages.success(request, "¡Presupuesto creado con éxito!")
+            return redirect('mi_finanzas:lista_presupuestos') 
+    else:
+        form = PresupuestoForm(user=request.user)
+
+    context = {
+        'presupuesto_form': form,
+        'form': TransferenciaForm(user=request.user),
+    }
+
+    return render(request, 'mi_finanzas/crear_presupuesto.html', context)
+
+
+@login_required
+def editar_presupuesto(request, pk):
+    """Vista para editar un presupuesto existente."""
+    presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
+
+    if request.method == 'POST':
+        form = PresupuestoForm(request.POST, instance=presupuesto, user=request.user) 
+        if form.is_valid():
+            form.save()
+            messages.success(request, "¡Presupuesto actualizado con éxito!")
+            return redirect('mi_finanzas:lista_presupuestos') 
+    else:
+        form = PresupuestoForm(instance=presupuesto, user=request.user)
+
+    context = {
+        'presupuesto_form': form,
+        'presupuesto': presupuesto,
+        'form': TransferenciaForm(user=request.user),
+    }
+
+    return render(request, 'mi_finanzas/editar_presupuesto.html', context)
+
+
+@login_required
+def eliminar_presupuesto(request, pk):
+    """Vista para eliminar un presupuesto existente."""
+    presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
+
+    if request.method == 'POST':
+        nombre_presupuesto = presupuesto.nombre
+        presupuesto.delete()
+        messages.success(request, f"El presupuesto '{nombre_presupuesto}' ha sido eliminado.")
+        return redirect('mi_finanzas:lista_presupuestos')
+    
+    return render(request, 'mi_finanzas/eliminar_presupuesto_confirm.html', {'presupuesto': presupuesto})
+
+
+# ========================================================
+# VISTAS DE REPORTES
+# ========================================================
+
+@login_required
+def reportes_financieros(request):
+    """Vista principal para mostrar diferentes tipos de reportes."""
+    
+    # 1. Calcular rango de fechas (ejemplo: últimos 6 meses)
+    hoy = date.today()
+    fecha_inicio = hoy - relativedelta(months=5)
+    
+    # 2. Obtener transacciones filtradas
+    transacciones = Transaccion.objects.filter(
+        usuario=request.user, 
+        fecha__gte=fecha_inicio
+    ).order_by('fecha')
+    
+    # 3. Datos para la gráfica (ejemplo: Ingresos vs. Egresos por mes)
+    # Aquí iría lógica compleja de agregación SQL, pero daremos el esqueleto
+    
+    # Total de Ingresos y Egresos en el rango
+    totales = transacciones.aggregate(
+        ingresos=Coalesce(Sum('monto', filter='monto__gt=0'), 0),
+        egresos=Coalesce(Sum('monto', filter='monto__lt=0'), 0)
+    )
+    
+    context = {
+        'transacciones': transacciones,
+        'totales': totales,
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': hoy,
+        'form': TransferenciaForm(user=request.user), # Para el modal
+    }
+    
+    return render(request, 'mi_finanzas/reportes_financieros.html', context)
