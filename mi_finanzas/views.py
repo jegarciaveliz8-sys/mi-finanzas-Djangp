@@ -180,3 +180,39 @@ def anadir_cuenta(request):
 
     # Asume que tienes una plantilla para este formulario
     return render(request, 'mi_finanzas/anadir_cuenta.html', context)
+
+
+from django.shortcuts import get_object_or_404 # Asegúrate de que esta importación esté al inicio
+from django.contrib import messages
+from django.shortcuts import redirect
+# Asegúrate de importar Cuenta, CuentaForm y TransferenciaForm
+
+@login_required
+def editar_cuenta(request, pk):
+    """Vista para editar una cuenta existente."""
+    # 1. Recuperar la cuenta o devolver 404 si no existe
+    # Asegúrate de que solo se editen las cuentas del usuario actual
+    cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
+
+    if request.method == 'POST':
+        # 2. Rellenar el formulario con los datos POST y la instancia de la cuenta
+        form = CuentaForm(request.POST, instance=cuenta) 
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"La cuenta '{cuenta.nombre}' ha sido actualizada.")
+            return redirect('mi_finanzas:cuentas_lista') 
+    else:
+        # 3. Mostrar el formulario precargado con los datos de la cuenta
+        form = CuentaForm(instance=cuenta)
+
+    # 4. Inyectar el formulario de transferencia para el modal (siempre necesario)
+    transferencia_form = TransferenciaForm(user=request.user)
+    
+    context = {
+        'form': transferencia_form,  # Formulario de transferencia
+        'cuenta_form': form,         # Formulario principal para editar
+        'cuenta': cuenta
+    }
+
+    # Asume que tienes una plantilla llamada 'mi_finanzas/editar_cuenta.html'
+    return render(request, 'mi_finanzas/editar_cuenta.html', context)
