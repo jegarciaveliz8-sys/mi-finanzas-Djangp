@@ -343,3 +343,23 @@ def eliminar_transaccion(request, pk):
     # Asume que tienes una plantilla para la confirmación
     return render(request, 'mi_finanzas/eliminar_transaccion_confirm.html', context)
 
+
+from django.views.generic import ListView
+# Asegúrate de importar tu modelo Presupuesto
+# from .models import Presupuesto 
+from django.utils.decorators import method_decorator
+from django.contrib.auth.decorators import login_required
+
+# Coloca esta clase junto a CuentasListView y TransaccionesListView
+@method_decorator(login_required, name='dispatch')
+class PresupuestosListView(ListView):
+    """Muestra la lista de presupuestos del usuario."""
+    # Asume que tienes un modelo llamado Presupuesto
+    model = Presupuesto 
+    template_name = 'mi_finanzas/presupuestos_lista.html' 
+    context_object_name = 'presupuestos'
+
+    def get_queryset(self):
+        # Filtra los presupuestos solo para el usuario actual
+        return Presupuesto.objects.filter(usuario=self.request.user).order_by('fecha_inicio')
+
