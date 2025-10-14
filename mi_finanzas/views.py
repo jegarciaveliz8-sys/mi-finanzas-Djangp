@@ -133,3 +133,18 @@ def anadir_transaccion(request):
         'form': transferencia_form, # ¡Inyectado!
     }
     return render(request, 'mi_finanzas/anadir_transaccion.html', context)
+
+
+@method_decorator(login_required, name='dispatch')
+class TransaccionesListView(ListView):
+    """Muestra la lista de transacciones del usuario."""
+    model = Transaccion 
+    template_name = 'mi_finanzas/transacciones_lista.html' 
+    context_object_name = 'transacciones'
+
+    def get_queryset(self):
+        # Filtra las transacciones solo para el usuario actual y las ordena por fecha
+        return Transaccion.objects.filter(usuario=self.request.user).order_by('-fecha')
+
+# ... (Si tuvieras más código) ...
+
