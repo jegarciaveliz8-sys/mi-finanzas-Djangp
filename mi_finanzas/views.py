@@ -246,3 +246,60 @@ def eliminar_cuenta(request, pk):
     # (aunque si se accede directamente por POST, funciona)
     # Asume que tienes una plantilla para la confirmación
     return render(request, 'mi_finanzas/eliminar_cuenta_confirm.html', {'cuenta': cuenta}) 
+
+
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db import transaction
+# Asegúrate de que los modelos y formularios (Transaccion, TransaccionForm) estén importados
+
+@login_required
+@transaction.atomic
+def editar_transaccion(request, pk):
+    """Vista para editar una transacción existente."""
+    # 1. Recuperar la transacción o devolver 404
+    transaccion_antigua = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
+    
+    # Guardamos el monto original de la transacción antes de cualquier cambio.
+    monto_original = transaccion_antigua.monto
+    
+    if request.method == 'POST':
+        # 2. Rellenar el formulario con los datos POST y la instancia de la transacción antigua
+        # Asume que tienes un formulario llamado TransaccionForm
+        form = TransaccionForm(request.POST, instance=transaccion_antigua) 
+        
+        if form.is_valid():
+            # 3. Guardar la nueva transacción (aún sin persistir en la DB)
+            transaccion_nueva = form.save(commit=False)
+            monto_nuevo = transaccion_nueva.monto
+            
+            # Lógica de ajuste de saldos (CRÍTICA)
+            # a. Deshacer el impacto del monto original en la cuenta
+            cuenta = transaccion_antigua.cuenta
+            cuenta.saldo += monto_original
+            
+            # b. Aplicar el impacto del monto nuevo en la cuenta
+            cuenta.saldo -= monto_nuevo # Si el monto es negativo, se convierte en suma
+            
+            # 4. Guardar los cambios
+            cuenta.save()
+            transaccion_nueva.save() # Guarda la transacción actualizada
+            
+            messages.success(request, "¡Transacción actualizada con éxito!")
+            return redirect('mi_finanzas:transacciones_lista') 
+    else:
+        # 5. Mostrar el formulario precargado con los datos de la transacción
+        form = TransaccionForm(instance=transaccion_antigua)
+
+    # 6. Inyectar el formulario de transferencia para el modal de base.html
+    transferencia_form = TransferenciaForm(user=request.user)
+    
+    context = {
+        'form': transferencia_form,       # Formulario de transferencia
+        'transaccion_form': form,         # Formulario principal para editar
+        'transaccion': transaccion_antigua
+    }
+
+    # Asume que tienes una plantilla para este formulario
+    return render(request, 'mi_finanzas/editar_transaccion.html', context)
