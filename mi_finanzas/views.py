@@ -216,3 +216,33 @@ def editar_cuenta(request, pk):
 
     # Asume que tienes una plantilla llamada 'mi_finanzas/editar_cuenta.html'
     return render(request, 'mi_finanzas/editar_cuenta.html', context)
+
+from django.shortcuts import get_object_or_404, redirect
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db import transaction # Recomendado para operaciones de eliminación sensibles
+# Asegúrate de importar Cuenta
+
+@login_required
+@transaction.atomic
+def eliminar_cuenta(request, pk):
+    """Vista para eliminar una cuenta existente."""
+    # 1. Recuperar la cuenta o devolver 404
+    cuenta = get_object_or_404(Cuenta, pk=pk, usuario=request.user)
+
+    if request.method == 'POST':
+        # 2. Verificar que el saldo sea cero antes de eliminar (Buena práctica de negocio)
+        if cuenta.saldo != 0:
+            messages.error(request, f"No se puede eliminar la cuenta '{cuenta.nombre}' porque su saldo no es cero. Transfiere los fondos primero.")
+            return redirect('mi_finanzas:cuentas_lista')
+            
+        # 3. Si el saldo es cero, eliminar la cuenta
+        nombre_cuenta = cuenta.nombre # Guardamos el nombre antes de la eliminación
+        cuenta.delete()
+        messages.success(request, f"La cuenta '{nombre_cuenta}' ha sido eliminada con éxito.")
+        return redirect('mi_finanzas:cuentas_lista')
+    
+    # 4. Si es GET, simplemente se debería mostrar un formulario de confirmación 
+    # (aunque si se accede directamente por POST, funciona)
+    # Asume que tienes una plantilla para la confirmación
+    return render(request, 'mi_finanzas/eliminar_cuenta_confirm.html', {'cuenta': cuenta}) 
