@@ -1,14 +1,12 @@
+{% load static %}
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="description" content="Guía completa para el uso de la aplicación de gestión financiera." />
-      <link rel="shortcut icon" href="img/favicon.ico" />
-    <title>Manual de Usuario - MiFinanzas</title>
-    <link rel="stylesheet" href="css/theme.css" />
-    <link rel="stylesheet" href="css/theme_extra.css" />
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    <link rel="shortcut icon" href="{% static 'img/favicon.ico' %}" />  <title>Manual de Usuario - MiFinanzas</title>
+    <link rel="stylesheet" href="{% static 'css/theme.css' %}" /> <link rel="stylesheet" href="{% static 'css/theme_extra.css' %}" /> <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
     
       <script>
         // Current page data
@@ -17,8 +15,6 @@
         var mkdocs_page_url = null;
       </script>
     
-    <!--[if lt IE 9]>
-      <script src="js/html5shiv.min.js"></script>
     <![endif]-->
       <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
       <script>hljs.highlightAll();</script> 
@@ -32,59 +28,58 @@
       <div class="wy-side-nav-search">
           <a href="." class="icon icon-home"> Manual de Usuario - MiFinanzas
         </a><div role="search">
-  <form id ="rtd-search-form" class="wy-form" action="./search.html" method="get">
-      <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
+  <form id ="rtd-search-form" class="wy-form" action="{% static 'search.html' %}" method="get"> <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" title="Type search term here" />
   </form>
 </div>
       </div>
 
       <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
-              <ul class="current">
-                <li class="toctree-l1 current"><a class="reference internal current" href="#">Inicio</a>
+                <ul class="current">
+                    <li class="toctree-l1 current"><a class="reference internal current" href="#">Inicio</a>
     <ul class="current">
     <li class="toctree-l2"><a class="reference internal" href="#1-introduccion-tu-control-financiero">1. Introducción: Tu Control Financiero</a>
-        <ul>
+            <ul>
     <li class="toctree-l3"><a class="reference internal" href="#11-navegacion-principal">1.1 Navegación Principal</a>
     </li>
-        </ul>
+            </ul>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#2-el-panel-de-control-financiero">2. El Panel de Control Financiero</a>
-        <ul>
+            <ul>
     <li class="toctree-l3"><a class="reference internal" href="#21-estado-financiero-global">2.1 Estado Financiero Global</a>
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#22-cuentas">2.2 🏦 Cuentas</a>
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#23-ultimas-transacciones">2.3 📰 Últimas Transacciones</a>
     </li>
-        </ul>
+            </ul>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#3-presupuestos-controla-tu-gasto-mensual">3. 📊 Presupuestos: Controla tu Gasto Mensual</a>
-        <ul>
+            <ul>
     <li class="toctree-l3"><a class="reference internal" href="#31-detalle-del-presupuesto">3.1 Detalle del Presupuesto</a>
     </li>
-        </ul>
+            </ul>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#4-anadir-transaccion-paso-a-paso">4. Añadir Transacción (Paso a Paso)</a>
-        <ul>
+            <ul>
     <li class="toctree-l3"><a class="reference internal" href="#paso-1-seleccionar-el-tipo">Paso 1: Seleccionar el Tipo</a>
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#paso-2-introducir-la-informacion-requerida">Paso 2: Introducir la Información Requerida</a>
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#paso-3-confirmar">Paso 3: Confirmar</a>
     </li>
-        </ul>
+            </ul>
     </li>
     <li class="toctree-l2"><a class="reference internal" href="#5-cuentas-e-historial">5. Cuentas e Historial</a>
-        <ul>
+            <ul>
     <li class="toctree-l3"><a class="reference internal" href="#51-gestion-de-cuentas">5.1 Gestión de Cuentas</a>
     </li>
     <li class="toctree-l3"><a class="reference internal" href="#52-historial-de-transacciones">5.2 Historial de Transacciones</a>
     </li>
-        </ul>
+            </ul>
     </li>
     </ul>
-                </li>
-              </ul>
+                    </li>
+                </ul>
       </div>
     </div>
     </nav>
@@ -93,7 +88,7 @@
       <nav class="wy-nav-top" role="navigation" aria-label="Mobile navigation menu">
           <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
           <a href=".">Manual de Usuario - MiFinanzas</a>
-        
+         
       </nav>
       <div class="wy-nav-content">
         <div class="rst-content"><div role="navigation" aria-label="breadcrumbs navigation">
@@ -108,7 +103,8 @@
           <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
             <div class="section" itemprop="articleBody">
               
-                <h1 id="manual-de-usuario-de-mifinanzas">📖 Manual de Usuario de MiFinanzas</h1>
+              
+                  <h1 id="manual-de-usuario-de-mifinanzas">📖 Manual de Usuario de MiFinanzas</h1>
 <p>Este documento te guiará a través de las principales funcionalidades de tu aplicación de gestión financiera personal.</p>
 <h3 id="1-introduccion-tu-control-financiero">1. Introducción: Tu Control Financiero</h3>
 <p>Bienvenido a MiFinanzas, la herramienta intuitiva diseñada para que tomes el control total de tu salud económica.</p>
@@ -272,18 +268,18 @@
 <hr />
 <p><em>Para soporte o preguntas, consulte la sección de Preguntas Frecuentes.</em></p>
               
+              
             </div>
           </div><footer>
 
   <hr/>
 
   <div role="contentinfo">
-    <!-- Copyright etc -->
-  </div>
+    </div>
 
   Built with <a href="https://www.mkdocs.org/">MkDocs</a> using a <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
 </footer>
-          
+         
         </div>
       </div>
 
@@ -296,14 +292,11 @@
     
     
     
+    
   </span>
 </div>
-    <script src="js/jquery-3.6.0.min.js"></script>
-    <script>var base_url = ".";</script>
-    <script src="js/theme_extra.js"></script>
-    <script src="js/theme.js"></script>
-      <script src="search/main.js"></script>
-    <script>
+    <script src="{% static 'js/jquery-3.6.0.min.js' %}"></script> <script>var base_url = ".";</script>
+    <script src="{% static 'js/theme_extra.js' %}"></script> <script src="{% static 'js/theme.js' %}"></script> <script src="{% static 'search/main.js' %}"></script> <script>
         jQuery(function () {
             SphinxRtdTheme.Navigation.enable(true);
         });
@@ -312,7 +305,3 @@
 </body>
 </html>
 
-<!--
-MkDocs version : 1.6.1
-Build Date UTC : 2025-10-14 03:32:07.401075+00:00
--->
