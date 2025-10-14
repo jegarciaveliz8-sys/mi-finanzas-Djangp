@@ -46,12 +46,12 @@ INSTALLED_APPS = [
 	# 💡 HERRAMIENTA DE DEPURACIÓN
 	'debug_toolbar', 
 	
-    # ✅ CORRECCIÓN CLAVE: Registrar la librería de tags de plantilla de Bootstrap 5
-    'bootstrap5', # ¡AGREGADO!
+	# ✅ Necesario para resolver el ModuleNotFoundError
+	'bootstrap5', 
 
 	'crispy_bootstrap5',
 	# Herramientas de terceros
-	'widget_tweaks',
+	# 'widget_tweaks',  <-- 🛑 COMENTADO: No es compatible con tu versión de Python/pip.
 	'django.contrib.humanize',
 	
 	# Mis aplicaciones
@@ -179,4 +179,3 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 # =============================================================
 # CONFIGURACIÓN DE SEGURIDAD PARA CARGAR CDN (solución final)
 # =============================================================
-
