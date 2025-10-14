@@ -16,13 +16,13 @@ User = get_user_model()
 class CuentaForm(forms.ModelForm):
     class Meta:
         model = Cuenta
-        # Nota: El campo 'balance' es ahora 'saldo' en muchos proyectos de finanzas. 
-        # Lo mantengo como 'balance' basándome en tu código original, pero revísalo.
-        fields = ['nombre', 'tipo', 'balance'] 
+        # 🔑 CORRECCIÓN: CAMBIADO 'balance' a 'saldo' (debe coincidir con models.py)
+        fields = ['nombre', 'tipo', 'saldo'] 
         widgets = {
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Principal'}),
             'tipo': Select(attrs={'class': 'form-select'}), 
-            'balance': NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
+            # 🔑 CORRECCIÓN: CAMBIADO 'balance' a 'saldo'
+            'saldo': NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
         }
 
 # ----------------------------------------------------
@@ -168,7 +168,7 @@ class PresupuestoForm(forms.ModelForm):
             self.fields['categoria'].widget.attrs.update({'class': 'form-select'})
 
 # ----------------------------------------------------
-# 5. Formulario de Categorías (CRUD) 🔑 AÑADIDO
+# 5. Formulario de Categorías (CRUD)
 # ----------------------------------------------------
 
 class CategoriaForm(forms.ModelForm):
@@ -185,11 +185,9 @@ class CategoriaForm(forms.ModelForm):
 
     class Meta:
         model = Categoria
-        # Asumiendo que el modelo Categoria tiene los campos 'nombre' y 'tipo'
         fields = ('nombre', 'tipo') 
         
         widgets = {
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Alimentación'}),
             'tipo': Select(attrs={'class': 'form-select'}),
         }
-
