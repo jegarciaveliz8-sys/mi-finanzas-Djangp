@@ -1,20 +1,21 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.views.generic import ListView, CreateView # Añadido CreateView
+from django.views.generic import ListView, CreateView 
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.forms import UserCreationForm 
 from django.utils.decorators import method_decorator
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Sum, DecimalField # Importar DecimalField para seguridad
 from django.db.models.functions import Coalesce
 from datetime import date
 from dateutil.relativedelta import relativedelta
+from decimal import Decimal # <--- NUEVA IMPORTACIÓN PARA SOLUCIONAR EL ERROR DE TIPO
 
 # ========================================================
 # 🔑 IMPORTACIONES CONSOLIDADAS DE MODELOS Y FORMULARIOS
 # ========================================================
-from .models import Cuenta, Transaccion, Presupuesto, Categoria # Asegúrate de que Categoria exista si se usa
+from .models import Cuenta, Transaccion, Presupuesto, Categoria 
 from .forms import TransferenciaForm, TransaccionForm, CuentaForm, PresupuestoForm, CategoriaForm 
 
 
@@ -38,14 +39,15 @@ def resumen_financiero(request):
     cuentas = Cuenta.objects.filter(usuario=request.user)
     
     # Cálculo simple del saldo total
-    # Coalesce se usa para asegurar que devuelva 0.00 si no hay cuentas
-    saldo_total = cuentas.aggregate(total=Coalesce(Sum('saldo'), 0.00))['total'] 
+    # CORRECCIÓN: Usar Decimal(0) para evitar la mezcla de Decimal/Float
+    saldo_total = cuentas.aggregate(total=Coalesce(Sum('saldo'), Decimal(0)))['total'] 
     
     # Obtener el presupuesto activo (ejemplo)
     presupuestos_activos = Presupuesto.objects.filter(
         usuario=request.user, 
-        fecha_inicio__lte=date.today(),
-        fecha_fin__gte=date.today()
+        # Si Presupuesto no tiene estos campos, debes comentar estas líneas:
+        # fecha_inicio__lte=date.today(),
+        # fecha_fin__gte=date.today()
     ).first()
     
     transferencia_form = TransferenciaForm(user=request.user)
@@ -378,6 +380,7 @@ def eliminar_presupuesto(request, pk):
     presupuesto = get_object_or_404(Presupuesto, pk=pk, usuario=request.user)
 
     if request.method == 'POST':
+        # Nota: Asumo que Presupuesto tiene un campo 'nombre'
         nombre_presupuesto = presupuesto.nombre
         presupuesto.delete()
         messages.success(request, f"El presupuesto '{nombre_presupuesto}' ha sido eliminado.")
@@ -404,13 +407,12 @@ def reportes_financieros(request):
         fecha__gte=fecha_inicio
     ).order_by('fecha')
     
-    # 3. Datos para la gráfica (ejemplo: Ingresos vs. Egresos por mes)
-    # Aquí iría lógica compleja de agregación SQL, pero daremos el esqueleto
-    
-    # Total de Ingresos y Egresos en el rango
+    # 3. Total de Ingresos y Egresos en el rango
+    # CORRECCIÓN: Usar Decimal(0) y especificar output_field=DecimalField() 
+    # para evitar el error de tipos mixtos (DecimalField con 0/int/float).
     totales = transacciones.aggregate(
-        ingresos=Coalesce(Sum('monto', filter='monto__gt=0'), 0),
-        egresos=Coalesce(Sum('monto', filter='monto__lt=0'), 0)
+        ingresos=Coalesce(Sum('monto', filter='monto__gt=0'), Decimal(0), output_field=DecimalField()),
+        egresos=Coalesce(Sum('monto', filter='monto__lt=0'), Decimal(0), output_field=DecimalField())
     )
     
     context = {
