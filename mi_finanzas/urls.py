@@ -22,7 +22,7 @@ urlpatterns = [
     # Vista de Cuentas (CLASE)
     path('cuentas/', views.CuentasListView.as_view(), name='cuentas_lista'),
     
-    # 🛑 CORRECCIÓN CLAVE: La vista de transacciones ahora usa .as_view()
+    # Vista de Transacciones (CLASE)
     path('transacciones/lista/', views.TransaccionesListView.as_view(), name='transacciones_lista'), 
     
     # RUTA DEL MANUAL
@@ -48,7 +48,8 @@ urlpatterns = [
     # =========================================================
     # 5. CRUD de Presupuestos
     # =========================================================
-    path('presupuestos/', views.presupuestos_lista, name='lista_presupuestos'), 
+    # 🔑 CORRECCIÓN CRÍTICA: Cambiado a PresupuestosListView.as_view()
+    path('presupuestos/', views.PresupuestosListView.as_view(), name='lista_presupuestos'), 
     path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
     path('presupuesto/<int:pk>/eliminar/', views.eliminar_presupuesto, name='eliminar_presupuesto'),
     
