@@ -16,14 +16,14 @@ urlpatterns = [
     # =========================================================
     # 2. Rutas de Vistas Principales (Dashboard y Listados)
     # =========================================================
-    # Dashboard accesible desde la raíz de la app y /resumen/
     path('', views.resumen_financiero, name='resumen_financiero'),
     path('resumen/', views.resumen_financiero, name='resumen_financiero'), 
     
-    # 🛑 CORRECCIÓN CLAVE: La vista CuentasListView debe usar .as_view()
+    # Vista de Cuentas (CLASE)
     path('cuentas/', views.CuentasListView.as_view(), name='cuentas_lista'),
     
-    path('transacciones/lista/', views.transacciones_lista, name='transacciones_lista'), 
+    # 🛑 CORRECCIÓN CLAVE: La vista de transacciones ahora usa .as_view()
+    path('transacciones/lista/', views.TransaccionesListView.as_view(), name='transacciones_lista'), 
     
     # RUTA DEL MANUAL
     path('manual/', TemplateView.as_view(template_name='manual_html/index.html'), name='manual_page'),
