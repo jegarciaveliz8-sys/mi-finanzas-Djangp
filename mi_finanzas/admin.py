@@ -1,47 +1,63 @@
 from django.contrib import admin
-# Asegúrate de importar Categoria.
-from .models import Cuenta, Transaccion, Categoria 
+# Importamos todos los modelos que se van a registrar en este archivo
+from .models import Cuenta, Transaccion, Categoria, TransaccionRecurrente, Presupuesto 
 
-# --- 1. CLASE ADMIN PARA CUENTA ---
+# -------------------------------------------------------------------------
+# 1. CLASE ADMIN PARA CUENTA
+# -------------------------------------------------------------------------
+
 class CuentaAdmin(admin.ModelAdmin):
-    list_display = ('nombre', 'usuario', 'tipo', 'balance') 
+    # CORRECCIÓN: 'balance' cambiado a 'saldo' para coincidir con models.py y evitar admin.E108
+    list_display = ('nombre', 'usuario', 'tipo', 'saldo') 
     list_filter = ('usuario', 'tipo')
     search_fields = ('nombre', 'usuario__username')
 
-# --- 2. CLASE ADMIN PARA TRANSACCION ---
+# -------------------------------------------------------------------------
+# 2. CLASE ADMIN PARA TRANSACCION
+# -------------------------------------------------------------------------
+
 class TransaccionAdmin(admin.ModelAdmin):
     list_display = ('fecha', 'usuario', 'cuenta', 'tipo', 'monto')
     list_filter = ('usuario', 'tipo', 'cuenta')
     search_fields = ('usuario__username', 'cuenta__nombre')
     date_hierarchy = 'fecha'
 
-# --- 3. CLASE ADMIN PARA CATEGORIA (FINALMENTE CORREGIDA) ---
+# -------------------------------------------------------------------------
+# 3. CLASE ADMIN PARA CATEGORIA
+# -------------------------------------------------------------------------
+
 class CategoriaAdmin(admin.ModelAdmin):
-    # Ya no incluimos 'tipo', solo los campos que existen en models.py: 'nombre' y 'usuario'.
     list_display = ('nombre', 'usuario') 
     list_filter = ('usuario',)
     search_fields = ('nombre',)
 
-# --- 4. REGISTRO ÚNICO DE LOS MODELOS ---
-admin.site.register(Cuenta, CuentaAdmin)
-admin.site.register(Transaccion, TransaccionAdmin)
-admin.site.register(Categoria, CategoriaAdmin)
-
-from django.contrib import admin
-from .models import TransaccionRecurrente # Asegúrate de importar
-
-# ... (Registros existentes)
+# -------------------------------------------------------------------------
+# 4. CLASE ADMIN PARA TRANSACCION RECURRENTE (usando decorador)
+# -------------------------------------------------------------------------
 
 @admin.register(TransaccionRecurrente)
 class TransaccionRecurrenteAdmin(admin.ModelAdmin):
     list_display = ('descripcion', 'monto', 'frecuencia', 'proximo_pago', 'esta_activa')
     list_filter = ('frecuencia', 'esta_activa')
-from django.contrib import admin
-from .models import Presupuesto # Asegúrate de importar
 
-# ... (Registros existentes)
+# -------------------------------------------------------------------------
+# 5. CLASE ADMIN PARA PRESUPUESTO (usando decorador)
+# -------------------------------------------------------------------------
 
 @admin.register(Presupuesto)
 class PresupuestoAdmin(admin.ModelAdmin):
     list_display = ('usuario', 'categoria', 'monto_limite', 'mes', 'anio')
     list_filter = ('mes', 'anio', 'categoria')
+
+# -------------------------------------------------------------------------
+# 6. REGISTRO DE MODELOS (usando admin.site.register)
+# -------------------------------------------------------------------------
+
+admin.site.register(Cuenta, CuentaAdmin)
+admin.site.register(Transaccion, TransaccionAdmin)
+admin.site.register(Categoria, CategoriaAdmin)
+
+# Nota: TransaccionRecurrente y Presupuesto ya están registrados arriba
+# con el decorador @admin.register().
+
+
