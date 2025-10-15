@@ -16,6 +16,7 @@ urlpatterns = [
     # =========================================================
     # 2. Rutas de Vistas Principales (Dashboard y Listados)
     # =========================================================
+    # Nota: Se mantiene 'resumen_financiero' para ambas rutas, pero es recomendable usar un solo nombre para evitar ambigüedades.
     path('', views.resumen_financiero, name='resumen_financiero'),
     path('resumen/', views.resumen_financiero, name='resumen_financiero'), 
     
@@ -42,13 +43,13 @@ urlpatterns = [
     path('transacciones/<int:pk>/editar/', views.editar_transaccion, name='editar_transaccion'),
     path('transacciones/<int:pk>/eliminar/', views.eliminar_transaccion, name='eliminar_transaccion'),
     
-    # RUTA DE TRANSFERENCIA
-    path('transferir/', views.transferir_monto, name='transferir_monto'),
+    # RUTA DE TRANSFERENCIA (¡CORREGIDA!)
+    # El 'name' ahora es 'transferencia' para que coincida con el modal de resumen_financiero.html
+    path('transferir/', views.transferir_monto, name='transferencia'), 
 
     # =========================================================
     # 5. CRUD de Presupuestos
     # =========================================================
-    # 🔑 CORRECCIÓN CRÍTICA: Cambiado a PresupuestosListView.as_view()
     path('presupuestos/', views.PresupuestosListView.as_view(), name='lista_presupuestos'), 
     path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
     path('presupuesto/<int:pk>/eliminar/', views.eliminar_presupuesto, name='eliminar_presupuesto'),
@@ -61,4 +62,3 @@ urlpatterns = [
     # =========================================================
     path('reportes/', views.reportes_financieros, name='reportes_financieros'),
 ]
-
