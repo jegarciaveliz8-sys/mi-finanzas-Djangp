@@ -1,38 +1,61 @@
-{% load django_bootstrap5 %}
+{% load widget_tweaks %} {# 🛑 CAMBIO CRÍTICO: Usamos widget_tweaks en lugar de django_bootstrap5 #}
 
 <form method="post" action="{% url 'mi_finanzas:transferir_monto' %}">
     {% csrf_token %}
-    
+
+    {# Mostrar errores no específicos del campo #}
+    {% for error in form.non_field_errors %}
+        <div class="alert alert-danger">{{ error }}</div>
+    {% endfor %}
+
     {# La clase 'row' inicia una nueva fila de la cuadrícula de Bootstrap #}
     <div class="row">
-        
-        {# Columna 1: Ocupa la mitad del ancho (6/12) en pantallas medianas y grandes #}
-        <div class="col-md-6">
-            {% bootstrap_field form.cuenta_origen %}
+       
+        {# Columna 1: Cuenta de Origen #}
+        <div class="col-md-6 mb-3">
+            <label for="{{ form.cuenta_origen.id_for_label }}" class="form-label">Cuenta de Origen</label>
+            {# Renderizar como select de Bootstrap #}
+            {% render_field form.cuenta_origen class="form-select" %}
+            {% for error in form.cuenta_origen.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
         </div>
-        
-        {# Columna 2: Ocupa la otra mitad del ancho #}
-        <div class="col-md-6">
-            {% bootstrap_field form.cuenta_destino %}
-        </div>
-    </div>
-
-    <div class="row">
-        <div class="col-md-6">
-            {% bootstrap_field form.monto %}
-        </div>
-        <div class="col-md-6">
-            {% bootstrap_field form.fecha %}
+       
+        {# Columna 2: Cuenta de Destino #}
+        <div class="col-md-6 mb-3">
+            <label for="{{ form.cuenta_destino.id_for_label }}" class="form-label">Cuenta de Destino</label>
+            {# Renderizar como select de Bootstrap #}
+            {% render_field form.cuenta_destino class="form-select" %}
+            {% for error in form.cuenta_destino.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
         </div>
     </div>
 
     <div class="row">
-        {# La descripción ocupa todo el ancho (12/12) #}
-        <div class="col-12">
-            {% bootstrap_field form.descripcion %}
+        {# Monto a transferir #}
+        <div class="col-md-6 mb-3">
+            <label for="{{ form.monto.id_for_label }}" class="form-label">Monto a transferir</label>
+            {# Renderizar como input de Bootstrap #}
+            {% render_field form.monto class="form-control" placeholder="0.00" %}
+            {% for error in form.monto.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+        
+        {# Fecha #}
+        <div class="col-md-6 mb-3">
+            <label for="{{ form.fecha.id_for_label }}" class="form-label">Fecha</label>
+            {# Renderizar como input de Bootstrap #}
+            {% render_field form.fecha class="form-control" %}
+            {% for error in form.fecha.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
         </div>
     </div>
-    
+
+    <div class="row">
+        {# Descripción #}
+        <div class="col-12 mb-3">
+            <label for="{{ form.descripcion.id_for_label }}" class="form-label">Descripcion</label>
+            {# Renderizar como textarea de Bootstrap #}
+            {% render_field form.descripcion class="form-control" rows="3" %}
+            {% for error in form.descripcion.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+    </div>
+   
     <div class="d-flex justify-content-end gap-2 mt-3">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
             Cancelar
@@ -42,4 +65,3 @@
         </button>
     </div>
 </form>
-
