@@ -53,6 +53,7 @@ INSTALLED_APPS = [
 
         # ✅ LIBRERÍAS DE FORMULARIOS (Crispy Forms para Bootstrap 5)
         'crispy_forms', 
+        'widget_tweaks', 
         'crispy_bootstrap5',
         'django_bootstrap5', # Requerido si lo usas en base.html
 
