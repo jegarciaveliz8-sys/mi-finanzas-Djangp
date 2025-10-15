@@ -1,89 +1,27 @@
 {% extends "base.html" %} 
-{% load widget_tweaks %}
+{% load crispy_forms_tags %}  {# <--- CORREGIDO: Usando Crispy Forms #}
 
 {% block content %}
     <div class="container mt-5">
         <div class="row justify-content-center">
-            {# Aumentamos la columna a 10 para mejor estética del formulario de dos columnas #}
             <div class="col-md-10">
                 <div class="card shadow">
                     <div class="card-header bg-primary text-white">
                         <h2 class="mb-0">{{ titulo }}</h2>
                     </div>
                     <div class="card-body">
-                        
-                        {# Aseguramos que la URL esté correcta con el namespace #}
                         <form method="post" action="{% url 'mi_finanzas:anadir_transaccion' %}">
                             {% csrf_token %}
                             
-                            {# Manejo de errores globales #}
-                            {% if form.errors %}
-                                <div class="alert alert-danger">
-                                    Por favor, corrige los siguientes errores:
-                                    {{ form.errors }}
-                                </div>
-                            {% endif %}
-
-                            {# === SOLUCIÓN DE DISEÑO: ESTRUCTURA DE COLUMNAS === #}
-                            
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.monto.id_for_label }}" class="form-label">Monto</label>
-                                    {# Renderiza el campo 'monto' y aplica el estilo form-control #}
-                                    {% render_field form.monto class="form-control" %}
-                                    {% for error in form.monto.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.tipo.id_for_label }}" class="form-label">Tipo</label>
-                                    {# Renderiza el campo 'tipo' y aplica el estilo form-select #}
-                                    {% render_field form.tipo class="form-select" %}
-                                    {% for error in form.tipo.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.cuenta.id_for_label }}" class="form-label">Cuenta</label>
-                                    {# Renderiza el campo 'cuenta' #}
-                                    {% render_field form.cuenta class="form-select" %}
-                                    {% for error in form.cuenta.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                                <div class="col-md-6 mb-3">
-                                    <label for="{{ form.categoria.id_for_label }}" class="form-label">Categoría</label>
-                                    {# Renderiza el campo 'categoria' #}
-                                    {% render_field form.categoria class="form-select" %}
-                                    {% for error in form.categoria.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                            </div>
-                            
-                            <div class="row">
-                                <div class="col-md-12 mb-3">
-                                    <label for="{{ form.fecha.id_for_label }}" class="form-label">Fecha</label>
-                                    {% render_field form.fecha class="form-control" %}
-                                    {% for error in form.fecha.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-12 mb-3">
-                                    <label for="{{ form.descripcion.id_for_label }}" class="form-label">Descripción</label>
-                                    {# Renderiza 'descripcion' como un textarea #}
-                                    {% render_field form.descripcion class="form-control" rows="3" %}
-                                    {% for error in form.descripcion.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
-                                </div>
-                            </div>
-
-                            {# === FIN DEL DISEÑO ESTRUCTURADO EN COLUMNAS === #}
+                            {# Renderiza el formulario completo con estilos de Bootstrap 5 #}
+                            {{ form|crispy }} 
 
                             <button type="submit" class="btn btn-success mt-3">Guardar Transacción</button>
-                            {# URL de Cancelar corregida con el namespace #}
                             <a href="{% url 'mi_finanzas:resumen_financiero' %}" class="btn btn-secondary mt-3">Cancelar</a>
                         </form>
-
                     </div>
                 </div>
             </div>
         </div>
     </div>
 {% endblock content %}
-
