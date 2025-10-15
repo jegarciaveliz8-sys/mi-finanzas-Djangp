@@ -299,30 +299,41 @@ def eliminar_cuenta(request, pk):
 def anadir_transaccion(request):
     """Vista para añadir una nueva transacción."""
     if request.method == 'POST':
-        # Necesitamos el usuario para filtrar las cuentas en el formulario
+        # 1. Instancia el Formulario de Transacción con los datos POST
         form = TransaccionForm(request.POST, user=request.user) 
         if form.is_valid():
             transaccion = form.save(commit=False)
             transaccion.usuario = request.user
-            
-            # Ajustar saldo de la cuenta
+             
+            # 2. Ajustar saldo de la cuenta
             cuenta = transaccion.cuenta
             cuenta.saldo += transaccion.monto # Si es egreso, monto es negativo, por lo que resta
             cuenta.save()
-            
+             
             transaccion.save()
             messages.success(request, "¡Transacción añadida con éxito!")
             return redirect('mi_finanzas:transacciones_lista')
     else:
+        # 3. Instancia el Formulario de Transacción vacío para el GET
         form = TransaccionForm(user=request.user)
 
+    # 4. Prepara el formulario de Transferencia (Solo si lo necesitas para un modal en esta página)
     transferencia_form = TransferenciaForm(user=request.user)
-    
+     
     context = {
-        'form': transferencia_form,
-        'transaccion_form': form,
+        # CORREGIDO: 'form' ahora es TransaccionForm (el formulario principal de la página)
+        'form': form,
+        # Si usas el modal de transferencia en esta página, lo pasas como otra variable
+        'form_transferencia': transferencia_form, 
     }
+    # Asegúrate de que tu plantilla renderiza {{ form }}
     return render(request, 'mi_finanzas/anadir_transaccion.html', context)
+
+
+@login_required
+@transaction.atomic
+# ... resto de la vista editar_transaccion ...
+
 
 
 @login_required
