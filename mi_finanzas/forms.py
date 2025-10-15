@@ -3,10 +3,12 @@ from django.forms.widgets import TextInput, NumberInput, Select, Textarea, DateI
 from django.utils import timezone
 import calendar 
 from django.contrib.auth import get_user_model
-from crispy_forms.helper import FormHelper
-from crispy_forms.layout import Layout, Submit, Row, Column, Fieldset # Agregué Fieldset para agrupar
 
-# Importaciones de Modelos (Asegúrate de que estos modelos existan en models.py)
+# IMPORTACIONES DE CRISPY FORMS
+from crispy_forms.helper import FormHelper
+from crispy_forms.layout import Layout, Row, Column 
+
+# Importaciones de Modelos
 from .models import Cuenta, Transaccion, Categoria, Presupuesto 
 
 User = get_user_model() 
@@ -18,7 +20,6 @@ User = get_user_model()
 class CuentaForm(forms.ModelForm):
     class Meta:
         model = Cuenta
-        # Usando 'saldo' tal como se corrigió previamente.
         fields = ['nombre', 'tipo', 'saldo'] 
         widgets = {
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Principal'}),
@@ -29,13 +30,13 @@ class CuentaForm(forms.ModelForm):
 # ----------------------------------------------------
 # 2. Formulario de Transacciones (CRUD)
 # ----------------------------------------------------
+
 class TransaccionForm(forms.ModelForm):
     # Sobrescribe la fecha para asegurar el widget HTML5 type='date'
     fecha = forms.DateField(
         widget=DateInput(attrs={'type': 'date', 'class': 'form-control'})
     )
     
-    # 🔑 CORRECCIÓN DE SANGRÍA AQUÍ (Sólo 4 espacios) 🔑
     def __init__(self, *args, **kwargs):
         # Acepta 'user' o 'request' para filtrar querysets
         request = kwargs.pop('request', None) 
@@ -66,11 +67,6 @@ class TransaccionForm(forms.ModelForm):
 
 # ----------------------------------------------------
 # 3. Formulario de Transferencia (Custom Form)
-# ... (El resto del archivo)
-
-
-# ----------------------------------------------------
-# 3. Formulario de Transferencia (Custom Form)
 # ----------------------------------------------------
 
 class TransferenciaForm(forms.Form):
@@ -91,7 +87,6 @@ class TransferenciaForm(forms.Form):
         decimal_places=2,
         widget=NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '100.00'})
     )
-    # ✅ CORRECCIÓN/ADICIÓN: Se añade el widget de fecha para asegurar el input de calendario.
     fecha = forms.DateField(
         widget=DateInput(attrs={'type': 'date', 'class': 'form-control', 'value': timezone.localdate()})
     )
@@ -114,14 +109,26 @@ class TransferenciaForm(forms.Form):
             cuentas_del_usuario = Cuenta.objects.filter(usuario=user)
             self.fields['cuenta_origen'].queryset = cuentas_del_usuario
             self.fields['cuenta_destino'].queryset = cuentas_del_usuario
-        
-        # Aplicación de estilos para Select
-        self.fields['cuenta_origen'].widget.attrs.update({'class': 'form-select'})
-        self.fields['cuenta_destino'].widget.attrs.update({'class': 'form-select'})
-        
-        # Inicializa la fecha con el día actual si no se está cargando data (instance)
+            
         if not self.is_bound:
             self.fields['fecha'].initial = timezone.localdate()
+
+        # 🔑 BLOQUE DE CONFIGURACIÓN DE CRISPY FORMS (AÑADIDO Y CORREGIDO) 🔑
+        self.helper = FormHelper()
+        self.helper.form_method = 'post'
+        # Definimos el layout para usar columnas de Bootstrap (col-md-6)
+        self.helper.layout = Layout(
+            Row(
+                Column('cuenta_origen', css_class='form-group col-md-6 mb-3'),
+                Column('cuenta_destino', css_class='form-group col-md-6 mb-3'),
+            ),
+            Row(
+                Column('monto', css_class='form-group col-md-6 mb-3'),
+                Column('fecha', css_class='form-group col-md-6 mb-3'),
+            ),
+            'descripcion',
+        )
+        # 🔑 FIN DEL BLOQUE CRISPY FORMS 🔑
 
     def clean(self):
         cleaned_data = super().clean()
