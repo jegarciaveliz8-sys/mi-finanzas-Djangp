@@ -11,11 +11,24 @@ User = get_user_model()
 # ========================================================
 
 TIPOS_CUENTA = [
+    # Tipos originales
     ('AHORROS', 'Ahorros'),
     ('CHEQUES', 'Cheques/Corriente'),
     ('INVERSION', 'Inversión'),
     ('TARJETA', 'Tarjeta de Crédito'),
     ('EFECTIVO', 'Efectivo'),
+    
+    # 🌟 NUEVOS TIPOS AÑADIDOS (10 adicionales) 🌟
+    ('PRESTAMO', 'Préstamo Personal/Deuda'), # Hipoteca o Préstamo Auto se manejan mejor como cuentas separadas
+    ('HIPOTECA', 'Hipoteca'), # Un pasivo a largo plazo
+    ('AUTO', 'Préstamo de Auto'), # Deuda de Auto
+    ('RETIRO', 'Cuenta de Retiro/Pensión'), # Inversión a largo plazo (401k, Afore, etc.)
+    ('CRYPTO', 'Criptomonedas'),
+    ('CDT', 'Certificado de Depósito (CDT)'), # Ahorro a plazo fijo
+    ('WALLET', 'Billetera Digital/PayPal'), # Dinero en plataformas (Venmo, PayPal)
+    ('METAS', 'Ahorro para Metas Específicas'), # Dinero apartado para un objetivo (viaje, gadget)
+    ('ACTIVO_FIJO', 'Activo Fijo (Valor Neto)'), # Bienes como propiedad o vehículo (solo para seguimiento del valor neto)
+    ('COBRO', 'Cuentas por Cobrar'), # Dinero que te deben
 ]
 
 # Usado para Transacción, Categoría y TransacciónRecurrente
@@ -38,8 +51,9 @@ FRECUENCIA_CHOICES = [
 class Cuenta(models.Model):
     usuario = models.ForeignKey(User, on_delete=models.CASCADE)
     nombre = models.CharField(max_length=100)
-    tipo = models.CharField(max_length=10, choices=TIPOS_CUENTA)
-    # 🔑 CORRECCIÓN: Usando 'saldo' en lugar de 'balance' para consistencia con vistas
+    # 🔑 Campo tipo actualizado con los nuevos choices
+    tipo = models.CharField(max_length=15, choices=TIPOS_CUENTA) 
+    # He incrementado max_length a 15 para acomodar los nuevos tipos más largos.
     saldo = models.DecimalField(max_digits=15, decimal_places=2, default=0.00) 
 
     class Meta:
