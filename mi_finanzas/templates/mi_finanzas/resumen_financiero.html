@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
+{% load humanize %} {# Añadido para formato de miles en números grandes #}
 
 {% block title %}Resumen Financiero{% endblock %}
 
@@ -10,58 +11,52 @@
         <button type="button" class="btn btn-primary mb-4" data-bs-toggle="modal" data-bs-target="#transferModal">
             <i class="fas fa-exchange-alt me-2"></i> Realizar Transferencia
         </button>
-        {# Alerta de Salud Financiera - Asumo que 'estado_financiero' se calcula en una función separada o se pasa. #}
-        {# Si no existe, esta sección fallará o estará vacía #}
+
+        {# Alerta de Salud Financiera #}
         <div class="alert {{ estado_financiero.tipo|default:'alert-info' }}" role="alert">
-            <i class="{{ estado_financiero.icono|default:'fas fa-info-circle' }} me-2"></i> <strong>¡Estado!</strong> {{ estado_financiero.mensaje|default:'Bienvenido a tu resumen financiero.' }}
+            <i class="{{ estado_financiero.icono|default:'fas fa-info-circle' }} me-2"></i> 
+            <strong>¡Estado!</strong> {{ estado_financiero.mensaje|default:'Bienvenido a tu resumen financiero.' }}
         </div>
-        
+       
         {# Métricas Principales (Saldo, Ingresos, Gastos) #}
         <div class="row mb-4">
             <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card text-white bg-primary shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Saldo Total Neto</h5>
-                        {# CORRECCIÓN: saldo_total_neto -> saldo_total #}
-                        <p class="card-text fs-3">${{ saldo_total|floatformat:2 }}</p>
+                        <p class="card-text fs-3">${{ saldo_total|floatformat:2|intcomma }}</p>
                     </div>
                 </div>
             </div>
             <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card text-white bg-success shadow-sm">
                     <div class="card-body">
-                        {# CORRECCIÓN: ingresos_del_mes -> ingresos_mes; mes_actual -> mes_actual_str #}
                         <h5 class="card-title">Ingresos de {{ mes_actual_str }}</h5>
-                        <p class="card-text fs-3">+${{ ingresos_mes|floatformat:2 }}</p>
+                        <p class="card-text fs-3">+${{ ingresos_mes|floatformat:2|intcomma }}</p>
                     </div>
                 </div>
             </div>
             <div class="col-lg-4 col-md-12 mb-3">
                 <div class="card text-white bg-danger shadow-sm">
                     <div class="card-body">
-                        {# CORRECCIÓN: gastos_del_mes -> gastos_mes; mes_actual -> mes_actual_str #}
                         <h5 class="card-title">Gastos de {{ mes_actual_str }}</h5>
-                        <p class="card-text fs-3">-${{ gastos_mes|floatformat:2 }}</p>
+                        <p class="card-text fs-3">-${{ gastos_mes|floatformat:2|intcomma }}</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        {# Sección de Presupuestos #}
-        {# CORRECCIÓN: mes_actual y anio_actual -> mes_actual_str #}
-        <h2 class="mt-4 mb-3">📊 Presupuestos del Mes ({{ mes_actual_str }})</h2>
+        {# ----------------------------------------------------------------- #}
+        {# 🛑 SECCIÓN DE PRESUPUESTOS (DUPLICACIÓN Y LIMPIEZA CORREGIDA) 🛑 #}
+        {# ----------------------------------------------------------------- #}
+        <div class="d-flex justify-content-between align-items-center mt-5 mb-3">
+            <h2 class="mb-0">📊 Presupuestos del Mes ({{ mes_actual_str }})</h2>
+            <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus me-1"></i> Nuevo Presupuesto
+            </a>
+        </div>
+        
         <div class="row">
-        <div class="d-flex justify-content-between align-items-center">
-    {# CORRECCIÓN: Duplicado y referencia a October 2025 hardcodeado eliminado/corregido #}
-    <h3 class="mb-0">📊 Presupuestos del Mes ({{ mes_actual_str }})</h3>
-    
-    <a href="{% url 'mi_finanzas:crear_presupuesto' %}" 
-        class="btn btn-primary btn-sm">
-            + Nuevo Presupuesto
-    </a>
-</div>        
-            {# Asumo que 'resultados_presupuesto' se pasa desde la vista, si no, usa 'presupuesto_activo' #}
-            {# Si la vista 'resumen_financiero' solo pasa 'presupuesto_activo' (un objeto, no una lista), este bucle debe ser ajustado #}
             {% if resultados_presupuesto %}
                 {% for presupuesto in resultados_presupuesto %}
                     <div class="col-lg-4 col-md-6 mb-4">
@@ -73,24 +68,24 @@
                                         <i class="fas fa-edit"></i>
                                     </a>
                                 </h5>
-                                
+                               
                                 <p class="card-text mb-1 small">
-                                    Límite: <strong>${{ presupuesto.monto_limite|floatformat:2 }}</strong>
+                                    Límite: <strong>${{ presupuesto.monto_limite|floatformat:2|intcomma }}</strong>
                                 </p>
                                 <p class="card-text mb-2 small">
-                                    Gastado: <strong>${{ presupuesto.gasto_actual|floatformat:2 }}</strong>
+                                    Gastado: <strong>${{ presupuesto.gasto_actual|floatformat:2|intcomma }}</strong>
                                 </p>
 
                                 <div class="progress" style="height: 25px;">
                                     <div class="progress-bar {{ presupuesto.color_barra }}" role="progressbar" 
-                                         style="width: {{ presupuesto.porcentaje|floatformat:0 }}%" 
-                                         aria-valuenow="{{ presupuesto.porcentaje }}" 
-                                         aria-valuemin="0" aria-valuemax="100">
+                                        style="width: {{ presupuesto.porcentaje|floatformat:0 }}%" 
+                                        aria-valuenow="{{ presupuesto.porcentaje }}" 
+                                        aria-valuemin="0" aria-valuemax="100">
                                         {{ presupuesto.porcentaje|floatformat:0 }}%
                                     </div>
                                 </div>
                                 <p class="card-text mt-2 text-{% if presupuesto.restante < 0 %}danger{% else %}success{% endif %}">
-                                    Restante: <strong>${{ presupuesto.restante|floatformat:2|default:"0.00" }}</strong>
+                                    Restante: <strong>${{ presupuesto.restante|floatformat:2|intcomma|default:"0.00" }}</strong>
                                 </p>
                             </div>
                         </div>
@@ -99,35 +94,31 @@
             {% else %}
                 <div class="col-12">
                     <div class="alert alert-info shadow-sm">
-                        {# CORRECCIÓN: mes_actual y anio_actual -> mes_actual_str #}
                         Aún no has configurado presupuestos para <strong>{{ mes_actual_str }}</strong>. 
                         <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="alert-link">¡Crea uno ahora!</a>
                     </div>
                 </div>
             {% endif %}
         </div>
-        
+       
         {# Gráfico de Gastos y Cuentas #}
         <div class="row mt-5">
             <div class="col-lg-6 mb-4">
-                {# CORRECCIÓN: mes_actual -> mes_actual_str #}
                 <h2 class="mb-3">💸 Gastos por Categoría ({{ mes_actual_str }})</h2>
                 <div class="card shadow">
                     <div class="card-body">
-                        {# El JS usará este canvas o lo reemplazará por un mensaje #}
                         <canvas id="gastosChart"></canvas>
                     </div>
                 </div>
             </div>
-            
+           
             <div class="col-lg-6 mb-4">
                 <h2 class="mb-3">🏦 Cuentas</h2>
                 {% for cuenta in cuentas %}
                     <div class="card mb-2 shadow-sm">
                         <div class="card-body d-flex justify-content-between align-items-center py-2">
                             <span>{{ cuenta.nombre }}</span>
-                            {# CORRECCIÓN: cuenta.balance -> cuenta.saldo #}
-                            <strong class="text-primary">${{ cuenta.saldo|floatformat:2 }}</strong>
+                            <strong class="text-primary">${{ cuenta.saldo|floatformat:2|intcomma }}</strong>
                         </div>
                     </div>
                 {% endfor %}
@@ -136,7 +127,7 @@
                 </div>
             </div>
         </div>
-        
+       
         {# Últimas Transacciones #}
         <h2 class="mt-5 mb-3">📰 Últimas Transacciones</h2>
         <div class="card shadow mb-5">
@@ -148,21 +139,17 @@
                             <small class="text-muted d-block">{{ transaccion.fecha|date:"d M, Y" }} en {{ transaccion.cuenta.nombre }}</small>
                         </div>
                         <span class="badge 
-                            {% if transaccion.tipo == 'INGRESO' %}
+                            {% if transaccion.tipo == 'INGRESO' or transaccion.tipo == 'TRANSFERENCIA_RECIBIDA' %}
                                 bg-success
-                            {% elif transaccion.tipo == 'EGRESO' %} {# CORRECCIÓN: Generalmente es EGRESO, no GASTO #}
+                            {% elif transaccion.monto < 0 %} {# Usar el monto negativo como fallback para EGRESO/GASTO/TRANSFERENCIA_ENVIADA #}
                                 bg-danger
                             {% else %}
                                 bg-secondary
                             {% endif %}
                         p-2 fs-6">
-                            {% if transaccion.tipo == 'INGRESO' or transaccion.tipo == 'TRANSFERENCIA_RECIBIDA' %}+{% else %}-{% endif %}
-                            {# Muestra el monto absoluto para Egresos y transferencias si es necesario, pero como la vista lo guarda negativo para egresos, se muestra el valor crudo #}
-                            {% if transaccion.tipo == 'INGRESO' or transaccion.tipo == 'TRANSFERENCIA_RECIBIDA' %}
-                                ${{ transaccion.monto|floatformat:2 }}
-                            {% else %}
-                                ${{ transaccion.monto|floatformat:2|slice:"1:" }} {# Eliminar el signo negativo para mostrar el valor absoluto #}
-                            {% endif %}
+                            {% if transaccion.monto >= 0 %}+{% else %}-{% endif %}
+                            {# Usamos abs para mostrar el valor positivo sin el signo negativo del backend #}
+                            ${{ transaccion.monto|floatformat:2|intcomma|cut:"-" }} 
                         </span>
                     </li>
                 {% empty %}
@@ -175,76 +162,66 @@
 {% endblock %}
 
 {% block extra_js %}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // CRÍTICO: Corrección de variable. Debe ser chart_data_json y usamos |safe.
-            // NOTA: Debes asegurarte de que la vista 'resumen_financiero' pase esta variable:
-            // context['chart_data_json'] = json.dumps({'labels': [...], 'data': [...]})
-            const chartDataJson = JSON.parse('{{ chart_data_json | safe }}');
-            const chartContainer = document.getElementById('gastosChart').parentNode;
-            const labelsLength = chartDataJson.labels.length;
+        // CRÍTICO: Asegurarse de que chart_data_json se pasa desde la vista con json.dumps()
+        const chartDataJson = JSON.parse('{{ chart_data_json | safe }}');
+        const chartContainer = document.getElementById('gastosChart').parentNode;
+        const labelsLength = chartDataJson.labels ? chartDataJson.labels.length : 0; // Usar ternario más seguro
+        
+        // Función para inyectar mensaje de estado
+        function displayMessage(message, alertClass) {
+            chartContainer.innerHTML = `<div class="text-center p-4 alert ${alertClass} shadow-sm">${message}</div>`;
+        }
 
-            // CASO 1: Múltiples categorías (labelsLength > 1)
-            if (labelsLength > 1) {
-                const ctx = document.getElementById('gastosChart').getContext('2d');
-                new Chart(ctx, {
-                    type: 'doughnut',
-                    data: {
-                        labels: chartDataJson.labels,
-                        datasets: [{
-                            data: chartDataJson.data,
-                            backgroundColor: [
-                                '#0d6efd', '#dc3545', '#ffc107', '#198754', '#6f42c1', '#20c997', '#fd7e14'
-                            ],
-                            hoverOffset: 4
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: {
-                            legend: {
-                                position: 'top',
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        let label = context.label || '';
-                                        if (label) {
-                                            label += ': ';
-                                        }
-                                        if (context.parsed !== null) {
-                                            label += '$' + context.parsed.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                                        }
-                                        return label;
+        // CASO 1: Múltiples categorías (labelsLength > 1)
+        if (labelsLength > 1) {
+            const ctx = document.getElementById('gastosChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: chartDataJson.labels,
+                    datasets: [{
+                        data: chartDataJson.data.map(Math.abs), // Asegurar que los datos del gráfico son positivos
+                        backgroundColor: [
+                            '#0d6efd', '#dc3545', '#ffc107', '#198754', '#6f42c1', '#20c997', '#fd7e14'
+                        ],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
                                     }
+                                    if (context.parsed !== null) {
+                                        // Formato de moneda
+                                        label += '$' + context.parsed.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                    }
+                                    return label;
                                 }
                             }
                         }
                     }
-                });
-            } else {
-                // CASO 2 & 3: Cero o una sola categoría. Muestra un mensaje en lugar del gráfico.
-                let message;
-                let alertClass;
-
-                if (labelsLength === 0) {
-                    // Cero categorías (No hay gastos)
-                    message = 'No hay gastos registrados en este mes para generar el gráfico.';
-                    alertClass = 'alert-info text-muted';
-                } else if (labelsLength === 1) {
-                    // Una sola categoría (Gráfico inútil, mejor mensaje)
-                    const categoria = chartDataJson.labels[0];
-                    // Usar Math.abs en el JS para asegurar que el gasto sea positivo
-                    const gasto = Math.abs(chartDataJson.data[0]).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                    
-                    message = `Solo hay gastos en la categoría <strong>${categoria}</strong> por $${gasto}. Se necesitan más categorías para un gráfico comparativo.`;
-                    alertClass = 'alert-warning';
                 }
-
-                // Inyecta el mensaje en el contenedor del gráfico
-                chartContainer.innerHTML = `<div class="text-center p-4 alert ${alertClass} shadow-sm">${message}</div>`;
+            });
+        } else {
+            // CASO 2 & 3: Cero o una sola categoría. Muestra un mensaje.
+            if (labelsLength === 0) {
+                displayMessage('No hay gastos registrados en este mes para generar el gráfico.', 'alert-info text-muted');
+            } else if (labelsLength === 1) {
+                const categoria = chartDataJson.labels[0];
+                const gasto = Math.abs(chartDataJson.data[0]).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                displayMessage(`Solo hay gastos en la categoría <strong>${categoria}</strong> por $${gasto}. Se necesitan más categorías para un gráfico comparativo.`, 'alert-warning');
             }
-        });
+        }
     </script>
 {% endblock %}
+
