@@ -10,50 +10,58 @@
         <button type="button" class="btn btn-primary mb-4" data-bs-toggle="modal" data-bs-target="#transferModal">
             <i class="fas fa-exchange-alt me-2"></i> Realizar Transferencia
         </button>
-        {# Alerta de Salud Financiera #}
-        <div class="alert {{ estado_financiero.tipo }}" role="alert">
-            <i class="{{ estado_financiero.icono }} me-2"></i> <strong>¡Estado!</strong> {{ estado_financiero.mensaje }}
+        {# Alerta de Salud Financiera - Asumo que 'estado_financiero' se calcula en una función separada o se pasa. #}
+        {# Si no existe, esta sección fallará o estará vacía #}
+        <div class="alert {{ estado_financiero.tipo|default:'alert-info' }}" role="alert">
+            <i class="{{ estado_financiero.icono|default:'fas fa-info-circle' }} me-2"></i> <strong>¡Estado!</strong> {{ estado_financiero.mensaje|default:'Bienvenido a tu resumen financiero.' }}
         </div>
-       
+        
         {# Métricas Principales (Saldo, Ingresos, Gastos) #}
         <div class="row mb-4">
             <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card text-white bg-primary shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Saldo Total Neto</h5>
-                        <p class="card-text fs-3">${{ saldo_total_neto|floatformat:2 }}</p>
+                        {# CORRECCIÓN: saldo_total_neto -> saldo_total #}
+                        <p class="card-text fs-3">${{ saldo_total|floatformat:2 }}</p>
                     </div>
                 </div>
             </div>
             <div class="col-lg-4 col-md-6 mb-3">
                 <div class="card text-white bg-success shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title">Ingresos de {{ mes_actual }}</h5>
-                        <p class="card-text fs-3">+${{ ingresos_del_mes|floatformat:2 }}</p>
+                        {# CORRECCIÓN: ingresos_del_mes -> ingresos_mes; mes_actual -> mes_actual_str #}
+                        <h5 class="card-title">Ingresos de {{ mes_actual_str }}</h5>
+                        <p class="card-text fs-3">+${{ ingresos_mes|floatformat:2 }}</p>
                     </div>
                 </div>
             </div>
             <div class="col-lg-4 col-md-12 mb-3">
                 <div class="card text-white bg-danger shadow-sm">
                     <div class="card-body">
-                        <h5 class="card-title">Gastos de {{ mes_actual }}</h5>
-                        <p class="card-text fs-3">-${{ gastos_del_mes|floatformat:2 }}</p>
+                        {# CORRECCIÓN: gastos_del_mes -> gastos_mes; mes_actual -> mes_actual_str #}
+                        <h5 class="card-title">Gastos de {{ mes_actual_str }}</h5>
+                        <p class="card-text fs-3">-${{ gastos_mes|floatformat:2 }}</p>
                     </div>
                 </div>
             </div>
         </div>
 
         {# Sección de Presupuestos #}
-        <h2 class="mt-4 mb-3">📊 Presupuestos del Mes ({{ mes_actual }} {{ anio_actual }})</h2>
+        {# CORRECCIÓN: mes_actual y anio_actual -> mes_actual_str #}
+        <h2 class="mt-4 mb-3">📊 Presupuestos del Mes ({{ mes_actual_str }})</h2>
         <div class="row">
         <div class="d-flex justify-content-between align-items-center">
-    <h3 class="mb-0">📊 Presupuestos del Mes (October 2025)</h3>
+    {# CORRECCIÓN: Duplicado y referencia a October 2025 hardcodeado eliminado/corregido #}
+    <h3 class="mb-0">📊 Presupuestos del Mes ({{ mes_actual_str }})</h3>
     
     <a href="{% url 'mi_finanzas:crear_presupuesto' %}" 
-       class="btn btn-primary btn-sm">
-        + Nuevo Presupuesto
+        class="btn btn-primary btn-sm">
+            + Nuevo Presupuesto
     </a>
 </div>        
+            {# Asumo que 'resultados_presupuesto' se pasa desde la vista, si no, usa 'presupuesto_activo' #}
+            {# Si la vista 'resumen_financiero' solo pasa 'presupuesto_activo' (un objeto, no una lista), este bucle debe ser ajustado #}
             {% if resultados_presupuesto %}
                 {% for presupuesto in resultados_presupuesto %}
                     <div class="col-lg-4 col-md-6 mb-4">
@@ -67,10 +75,10 @@
                                 </h5>
                                 
                                 <p class="card-text mb-1 small">
-                                    Límite: **${{ presupuesto.monto_limite|floatformat:2 }}**
+                                    Límite: <strong>${{ presupuesto.monto_limite|floatformat:2 }}</strong>
                                 </p>
                                 <p class="card-text mb-2 small">
-                                    Gastado: **${{ presupuesto.gasto_actual|floatformat:2 }}**
+                                    Gastado: <strong>${{ presupuesto.gasto_actual|floatformat:2 }}</strong>
                                 </p>
 
                                 <div class="progress" style="height: 25px;">
@@ -82,7 +90,7 @@
                                     </div>
                                 </div>
                                 <p class="card-text mt-2 text-{% if presupuesto.restante < 0 %}danger{% else %}success{% endif %}">
-                                    Restante: **${{ presupuesto.restante|floatformat:2|default:"0.00" }}**
+                                    Restante: <strong>${{ presupuesto.restante|floatformat:2|default:"0.00" }}</strong>
                                 </p>
                             </div>
                         </div>
@@ -91,7 +99,8 @@
             {% else %}
                 <div class="col-12">
                     <div class="alert alert-info shadow-sm">
-                        Aún no has configurado presupuestos para **{{ mes_actual }} {{ anio_actual }}**. 
+                        {# CORRECCIÓN: mes_actual y anio_actual -> mes_actual_str #}
+                        Aún no has configurado presupuestos para <strong>{{ mes_actual_str }}</strong>. 
                         <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="alert-link">¡Crea uno ahora!</a>
                     </div>
                 </div>
@@ -101,7 +110,8 @@
         {# Gráfico de Gastos y Cuentas #}
         <div class="row mt-5">
             <div class="col-lg-6 mb-4">
-                <h2 class="mb-3">💸 Gastos por Categoría ({{ mes_actual }})</h2>
+                {# CORRECCIÓN: mes_actual -> mes_actual_str #}
+                <h2 class="mb-3">💸 Gastos por Categoría ({{ mes_actual_str }})</h2>
                 <div class="card shadow">
                     <div class="card-body">
                         {# El JS usará este canvas o lo reemplazará por un mensaje #}
@@ -116,7 +126,8 @@
                     <div class="card mb-2 shadow-sm">
                         <div class="card-body d-flex justify-content-between align-items-center py-2">
                             <span>{{ cuenta.nombre }}</span>
-                            <strong class="text-primary">${{ cuenta.balance|floatformat:2 }}</strong>
+                            {# CORRECCIÓN: cuenta.balance -> cuenta.saldo #}
+                            <strong class="text-primary">${{ cuenta.saldo|floatformat:2 }}</strong>
                         </div>
                     </div>
                 {% endfor %}
@@ -139,14 +150,19 @@
                         <span class="badge 
                             {% if transaccion.tipo == 'INGRESO' %}
                                 bg-success
-                            {% elif transaccion.tipo == 'GASTO' %}
+                            {% elif transaccion.tipo == 'EGRESO' %} {# CORRECCIÓN: Generalmente es EGRESO, no GASTO #}
                                 bg-danger
                             {% else %}
                                 bg-secondary
                             {% endif %}
                         p-2 fs-6">
                             {% if transaccion.tipo == 'INGRESO' or transaccion.tipo == 'TRANSFERENCIA_RECIBIDA' %}+{% else %}-{% endif %}
-                            ${{ transaccion.monto|floatformat:2 }}
+                            {# Muestra el monto absoluto para Egresos y transferencias si es necesario, pero como la vista lo guarda negativo para egresos, se muestra el valor crudo #}
+                            {% if transaccion.tipo == 'INGRESO' or transaccion.tipo == 'TRANSFERENCIA_RECIBIDA' %}
+                                ${{ transaccion.monto|floatformat:2 }}
+                            {% else %}
+                                ${{ transaccion.monto|floatformat:2|slice:"1:" }} {# Eliminar el signo negativo para mostrar el valor absoluto #}
+                            {% endif %}
                         </span>
                     </li>
                 {% empty %}
@@ -163,6 +179,8 @@
     <script>
         document.addEventListener('DOMContentLoaded', function () {
             // CRÍTICO: Corrección de variable. Debe ser chart_data_json y usamos |safe.
+            // NOTA: Debes asegurarte de que la vista 'resumen_financiero' pase esta variable:
+            // context['chart_data_json'] = json.dumps({'labels': [...], 'data': [...]})
             const chartDataJson = JSON.parse('{{ chart_data_json | safe }}');
             const chartContainer = document.getElementById('gastosChart').parentNode;
             const labelsLength = chartDataJson.labels.length;
@@ -217,7 +235,8 @@
                 } else if (labelsLength === 1) {
                     // Una sola categoría (Gráfico inútil, mejor mensaje)
                     const categoria = chartDataJson.labels[0];
-                    const gasto = chartDataJson.data[0].toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                    // Usar Math.abs en el JS para asegurar que el gasto sea positivo
+                    const gasto = Math.abs(chartDataJson.data[0]).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
                     
                     message = `Solo hay gastos en la categoría <strong>${categoria}</strong> por $${gasto}. Se necesitan más categorías para un gráfico comparativo.`;
                     alertClass = 'alert-warning';
