@@ -228,3 +228,47 @@
     </script>
 {% endblock %}
 
+
+
+    {# -------------------------------------------------------- #}
+    {# 🛑 MODAL PARA REALIZAR TRANSFERENCIA (AÑADIDO) 🛑 #}
+    {# -------------------------------------------------------- #}
+    <div class="modal fade" id="transferModal" tabindex="-1" aria-labelledby="transferModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="transferModalLabel">Nueva Transferencia de Fondos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <form action="{% url 'mi_finanzas:transferencia' %}" method="post">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        {% if form_transferencia %}
+                            <div class="alert alert-info small" role="alert">
+                                Asegúrate de que el monto es positivo. La aplicación gestionará el débito de la cuenta de origen.
+                            </div>
+                            {# Renderiza todos los campos del formulario de transferencia #}
+                            {% for field in form_transferencia %}
+                                <div class="mb-3">
+                                    {{ field.label_tag }}
+                                    {{ field }}
+                                    {% for error in field.errors %}
+                                        <div class="text-danger small">{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-danger">El formulario de transferencia no se ha cargado para esta página.</p>
+                        {% endif %}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">Realizar Transferencia</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    {# -------------------------------------------------------- #}
+{% endblock %}
+
