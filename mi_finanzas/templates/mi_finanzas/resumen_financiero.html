@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% load static %}
-{% load humanize %} {# Añadido para formato de miles en números grandes #}
+{% load humanize %} 
 
 {% block title %}Resumen Financiero{% endblock %}
 
@@ -40,15 +40,14 @@
                 <div class="card text-white bg-danger shadow-sm">
                     <div class="card-body">
                         <h5 class="card-title">Gastos de {{ mes_actual_str }}</h5>
+                        {# El signo ya viene en el valor, pero lo mostramos sin él para usar el badge de color #}
                         <p class="card-text fs-3">-${{ gastos_mes|floatformat:2|intcomma }}</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        {# ----------------------------------------------------------------- #}
-        {# 🛑 SECCIÓN DE PRESUPUESTOS (DUPLICACIÓN Y LIMPIEZA CORREGIDA) 🛑 #}
-        {# ----------------------------------------------------------------- #}
+        {# SECCIÓN DE PRESUPUESTOS (Título no duplicado) #}
         <div class="d-flex justify-content-between align-items-center mt-5 mb-3">
             <h2 class="mb-0">📊 Presupuestos del Mes ({{ mes_actual_str }})</h2>
             <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="btn btn-primary btn-sm">
@@ -128,7 +127,9 @@
             </div>
         </div>
        
-        {# Últimas Transacciones #}
+        {# -------------------------------------------------------- #}
+        {# 🛑 ÚLTIMAS TRANSACCIONES (LÓGICA DE SIGNO CORREGIDA) 🛑 #}
+        {# -------------------------------------------------------- #}
         <h2 class="mt-5 mb-3">📰 Últimas Transacciones</h2>
         <div class="card shadow mb-5">
             <ul class="list-group list-group-flush">
@@ -139,16 +140,19 @@
                             <small class="text-muted d-block">{{ transaccion.fecha|date:"d M, Y" }} en {{ transaccion.cuenta.nombre }}</small>
                         </div>
                         <span class="badge 
-                            {% if transaccion.tipo == 'INGRESO' or transaccion.tipo == 'TRANSFERENCIA_RECIBIDA' %}
+                            {# Color: Verde para Ingreso/Positivo, Rojo para Egreso/Negativo #}
+                            {% if transaccion.monto > 0 %}
                                 bg-success
-                            {% elif transaccion.monto < 0 %} {# Usar el monto negativo como fallback para EGRESO/GASTO/TRANSFERENCIA_ENVIADA #}
+                            {% elif transaccion.monto < 0 %}
                                 bg-danger
                             {% else %}
                                 bg-secondary
                             {% endif %}
                         p-2 fs-6">
-                            {% if transaccion.monto >= 0 %}+{% else %}-{% endif %}
-                            {# Usamos abs para mostrar el valor positivo sin el signo negativo del backend #}
+                            {# Signo: + para Ingreso, - para Egreso #}
+                            {% if transaccion.monto > 0 %}+{% else %}-{% endif %}
+                            
+                            {# Valor: Mostrar el valor absoluto con formato #}
                             ${{ transaccion.monto|floatformat:2|intcomma|cut:"-" }} 
                         </span>
                     </li>
@@ -163,65 +167,67 @@
 
 {% block extra_js %}
     <script>
-        // CRÍTICO: Asegurarse de que chart_data_json se pasa desde la vista con json.dumps()
-        const chartDataJson = JSON.parse('{{ chart_data_json | safe }}');
-        const chartContainer = document.getElementById('gastosChart').parentNode;
-        const labelsLength = chartDataJson.labels ? chartDataJson.labels.length : 0; // Usar ternario más seguro
-        
-        // Función para inyectar mensaje de estado
-        function displayMessage(message, alertClass) {
-            chartContainer.innerHTML = `<div class="text-center p-4 alert ${alertClass} shadow-sm">${message}</div>`;
-        }
+        document.addEventListener('DOMContentLoaded', function () {
+            // CRÍTICO: Asegurarse de que chart_data_json se pasa desde la vista con json.dumps()
+            const chartDataJson = JSON.parse('{{ chart_data_json | safe }}');
+            const chartContainer = document.getElementById('gastosChart').parentNode;
+            const labelsLength = chartDataJson.labels ? chartDataJson.labels.length : 0;
+            
+            // Función para inyectar mensaje de estado
+            function displayMessage(message, alertClass) {
+                chartContainer.innerHTML = `<div class="text-center p-4 alert ${alertClass} shadow-sm">${message}</div>`;
+            }
 
-        // CASO 1: Múltiples categorías (labelsLength > 1)
-        if (labelsLength > 1) {
-            const ctx = document.getElementById('gastosChart').getContext('2d');
-            new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: chartDataJson.labels,
-                    datasets: [{
-                        data: chartDataJson.data.map(Math.abs), // Asegurar que los datos del gráfico son positivos
-                        backgroundColor: [
-                            '#0d6efd', '#dc3545', '#ffc107', '#198754', '#6f42c1', '#20c997', '#fd7e14'
-                        ],
-                        hoverOffset: 4
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'top',
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.label || '';
-                                    if (label) {
-                                        label += ': ';
+            // CASO 1: Múltiples categorías (labelsLength > 1)
+            if (labelsLength > 1) {
+                const ctx = document.getElementById('gastosChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: chartDataJson.labels,
+                        datasets: [{
+                            data: chartDataJson.data.map(Math.abs), // Asegurar que los datos del gráfico son positivos
+                            backgroundColor: [
+                                '#0d6efd', '#dc3545', '#ffc107', '#198754', '#6f42c1', '#20c997', '#fd7e14'
+                            ],
+                            hoverOffset: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'top',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed !== null) {
+                                            // Formato de moneda
+                                            label += '$' + context.parsed.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                                        }
+                                        return label;
                                     }
-                                    if (context.parsed !== null) {
-                                        // Formato de moneda
-                                        label += '$' + context.parsed.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                                    }
-                                    return label;
                                 }
                             }
                         }
                     }
+                });
+            } else {
+                // CASO 2 & 3: Cero o una sola categoría. Muestra un mensaje.
+                if (labelsLength === 0) {
+                    displayMessage('No hay gastos registrados en este mes para generar el gráfico.', 'alert-info text-muted');
+                } else if (labelsLength === 1) {
+                    const categoria = chartDataJson.labels[0];
+                    const gasto = Math.abs(chartDataJson.data[0]).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                    displayMessage(`Solo hay gastos en la categoría <strong>${categoria}</strong> por $${gasto}. Se necesitan más categorías para un gráfico comparativo.`, 'alert-warning');
                 }
-            });
-        } else {
-            // CASO 2 & 3: Cero o una sola categoría. Muestra un mensaje.
-            if (labelsLength === 0) {
-                displayMessage('No hay gastos registrados en este mes para generar el gráfico.', 'alert-info text-muted');
-            } else if (labelsLength === 1) {
-                const categoria = chartDataJson.labels[0];
-                const gasto = Math.abs(chartDataJson.data[0]).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                displayMessage(`Solo hay gastos en la categoría <strong>${categoria}</strong> por $${gasto}. Se necesitan más categorías para un gráfico comparativo.`, 'alert-warning');
             }
-        }
+        });
     </script>
 {% endblock %}
 
