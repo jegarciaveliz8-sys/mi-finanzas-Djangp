@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load humanize %} 
-{% load crispy_forms_tags %}  {# ✅ CORRECCIÓN: Movido aquí para asegurar la carga del tag. #}
+{% load widget_tweaks %}  {# ✅ CAMBIO CRÍTICO: Usamos widget_tweaks para forzar el diseño de Bootstrap. #}
 
 {% block title %}Resumen Financiero{% endblock %}
 
@@ -174,40 +174,74 @@
     
     
     {# -------------------------------------------------------- #}
-    {# MODAL PARA REALIZAR TRANSFERENCIA #}
+    {# MODAL PARA REALIZAR TRANSFERENCIA (Renderizado Manual con Widget Tweaks) #}
     {# -------------------------------------------------------- #}
     <div class="modal fade" id="transferModal" tabindex="-1" aria-labelledby="transferModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="transferModalLabel">Nueva Transferencia de Fondos</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="transferModalLabel">Nueva Transferencia de Fondos</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                
+                <form action="{% url 'mi_finanzas:transferencia' %}" method="post">
+                    {% csrf_token %}
+                    <div class="modal-body">
+                        {% if form_transferencia %}
+                            <div class="alert alert-info small" role="alert">
+                                Asegúrate de que el monto es positivo.
+                            </div>
+                            
+                            {# 🔑 RENDERIZADO MANUAL CON COLUMNAS USANDO WIDGET TWEAKS #}
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form_transferencia.cuenta.id_for_label }}" class="form-label">Cuenta de Origen</label>
+                                        {% render_field form_transferencia.cuenta class="form-select" %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form_transferencia.cuenta_destino.id_for_label }}" class="form-label">Cuenta de Destino</label>
+                                        {% render_field form_transferencia.cuenta_destino class="form-select" %}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {# Campos que ocupan el ancho completo #}
+                            <div class="mb-3">
+                                <label for="{{ form_transferencia.monto.id_for_label }}" class="form-label">Monto a transferir</label>
+                                {% render_field form_transferencia.monto class="form-control" %}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="{{ form_transferencia.fecha.id_for_label }}" class="form-label">Fecha</label>
+                                {% render_field form_transferencia.fecha class="form-control" %}
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="{{ form_transferencia.descripcion.id_for_label }}" class="form-label">Descripción</label>
+                                {% render_field form_transferencia.descripcion class="form-control" rows="3" %}
+                            </div>
+
+                            {# Muestra errores no de campo (opcional) #}
+                            {% for error in form_transferencia.non_field_errors %}
+                                <div class="alert alert-danger">{{ error }}</div>
+                            {% endfor %}
+                            
+                        {% else %}
+                            <p class="text-danger">El formulario de transferencia no se ha cargado para esta página.</p>
+                        {% endif %}
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="submit" class="btn btn-success">Realizar Transferencia</button>
+                    </div>
+                </form>
             </div>
-            
-            <form action="{% url 'mi_finanzas:transferencia' %}" method="post">
-                {% csrf_token %}
-                <div class="modal-body">
-                    {% if form_transferencia %}
-                        <div class="alert alert-info small" role="alert">
-                            Asegúrate de que el monto es positivo. La aplicación gestionará el débito de la cuenta de origen.
-                        </div>
-                        
-                        {# 🔑 RENDERIZADO DEL FORMULARIO: Usa la etiqueta Crispy #}
-                        {% crispy form_transferencia %}
-                        
-                    {% else %}
-                        <p class="text-danger">El formulario de transferencia no se ha cargado para esta página.</p>
-                    {% endif %}
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="submit" class="btn btn-success">Realizar Transferencia</button>
-                </div>
-            </form>
         </div>
     </div>
-</div>
-{# -------------------------------------------------------- #}
+    {# -------------------------------------------------------- #}
 
 
 {% endblock %} 
