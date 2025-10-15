@@ -2,12 +2,13 @@
 Configuración de Django para el proyecto gestor_financiero_final.
 
 CORRECCIONES REALIZADAS:
-1. Se asegura la configuración de Crispy Forms para usar Bootstrap 5.
-2. Se elimina la línea comentada de 'widget_tweaks' para evitar confusiones futuras.
+1. Se elimina 'django_bootstrap5' de INSTALLED_APPS para evitar conflictos con Crispy Forms.
+2. Se asegura la configuración de Crispy Forms para usar Bootstrap 5.
 """
 
 from pathlib import Path
 import os 
+from django.utils.translation import gettext_lazy as _
 
 # Construye paths dentro del proyecto: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -55,7 +56,7 @@ INSTALLED_APPS = [
         'crispy_forms', 
         'widget_tweaks', 
         'crispy_bootstrap5',
-        'django_bootstrap5', # Requerido si lo usas en base.html
+        # 'django_bootstrap5', # 🛑 ELIMINADA: Causaba conflicto de renderizado con Crispy Forms.
 
         # Mis aplicaciones locales
         'mi_finanzas', 
@@ -181,6 +182,8 @@ CRISPY_TEMPLATE_PACK = "bootstrap5"
 
 
 # =============================================================
-# CONFIGURACIÓN DE SEGURIDAD PARA CARGAR CDN (solución final)
+# CONFIGURACIÓN DE SEGURIDAD PARA CARGAR CDN
 # =============================================================
+# NOTA: No hay configuraciones de seguridad de CDN aquí, pero se deja el título
+# si se necesitan en el futuro (ej: CSP).
 
