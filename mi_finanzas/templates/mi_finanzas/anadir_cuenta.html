@@ -13,18 +13,32 @@
                 <form method="post">
                     {% csrf_token %}
 
-                    {# Itera sobre los campos del formulario y aplica estilos Bootstrap #}
+                    {# Muestra errores no específicos del campo #}
+                    {% for error in form.non_field_errors %}
+                        <div class="alert alert-danger">{{ error }}</div>
+                    {% endfor %}
+
                     {% for field in form %}
                         <div class="mb-3">
                             <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}</label>
                             
-                            {# CRUCIAL: Aplica el filtro add_class para Bootstrap #}
-                            {{ field|add_class:"form-control" }}
+                            {# 🛑 CORRECCIÓN CRÍTICA 🛑 #}
+                            {% if field.field.widget|widget_type == 'select' %}
+                                {# Usa form-select para los campos desplegables #}
+                                {% render_field field class="form-select" %}
+                            {% else %}
+                                {# Usa form-control para campos de texto, número, fecha, etc. #}
+                                {% render_field field class="form-control" placeholder=field.label %}
+                            {% endif %}
                             
                             {# Muestra errores específicos del campo #}
                             {% for error in field.errors %}
                                 <div class="text-danger small">{{ error }}</div>
                             {% endfor %}
+                            
+                            {% if field.help_text %}
+                                <small class="text-muted d-block">{{ field.help_text|safe }}</small>
+                            {% endif %}
                         </div>
                     {% endfor %}
 
