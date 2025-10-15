@@ -8,10 +8,19 @@
     <div class="container mt-5">
         <h1 class="mb-4">Panel de Control Financiero</h1>
 
-        {# Botón para abrir el Modal de Transferencia #}
-        <button type="button" class="btn btn-primary mb-4" data-bs-toggle="modal" data-bs-target="#transferModal">
-            <i class="fas fa-exchange-alt me-2"></i> Realizar Transferencia
-        </button>
+        {# 🛑 INICIO DE LA SECCIÓN DE BOTONES DE ACCIÓN CORREGIDA 🛑 #}
+        <div class="d-flex mb-4 gap-2 flex-wrap">
+            {# Botón para Añadir Transacción (Ingreso/Gasto) - ¡CORREGIDO para ir a una URL! #}
+            <a href="{% url 'mi_finanzas:anadir_transaccion' %}" class="btn btn-success">
+                <i class="fas fa-plus-circle me-2"></i> Añadir Transacción
+            </a>
+            
+            {# Botón para abrir el Modal de Transferencia #}
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#transferModal">
+                <i class="fas fa-exchange-alt me-2"></i> Realizar Transferencia
+            </button>
+        </div>
+        {# 🛑 FIN DE LA SECCIÓN DE BOTONES DE ACCIÓN CORREGIDA 🛑 #}
 
         {# Alerta de Salud Financiera #}
         <div class="alert {{ estado_financiero.tipo|default:'alert-info' }}" role="alert">
@@ -128,7 +137,7 @@
         </div>
         
         {# ------------------------------------------------------------------- #}
-        {# 🛑 ÚLTIMAS TRANSACCIONES (LÓGICA CORREGIDA CON TIPO DE TRANSACCIÓN) 🛑 #}
+        {# Últimas Transacciones #}
         {# ------------------------------------------------------------------- #}
         <h2 class="mt-5 mb-3">📰 Últimas Transacciones</h2>
         <div class="card shadow mb-5">
@@ -165,8 +174,7 @@
     
     
     {# -------------------------------------------------------- #}
-    {# 🛑 MODAL PARA REALIZAR TRANSFERENCIA (AÑADIDO) 🛑 #}
-    {# Se coloca al final del content block, pero ANTES del endblock. #}
+    {# MODAL PARA REALIZAR TRANSFERENCIA #}
     {# -------------------------------------------------------- #}
     <div class="modal fade" id="transferModal" tabindex="-1" aria-labelledby="transferModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -175,6 +183,7 @@
                     <h5 class="modal-title" id="transferModalLabel">Nueva Transferencia de Fondos</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
+                {# La URL está correctamente apuntada a 'mi_finanzas:transferencia' #}
                 <form action="{% url 'mi_finanzas:transferencia' %}" method="post">
                     {% csrf_token %}
                     <div class="modal-body">
