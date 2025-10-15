@@ -1,5 +1,9 @@
 """
 Configuración de Django para el proyecto gestor_financiero_final.
+
+CORRECCIONES REALIZADAS:
+1. Se asegura la configuración de Crispy Forms para usar Bootstrap 5.
+2. Se elimina la línea comentada de 'widget_tweaks' para evitar confusiones futuras.
 """
 
 from pathlib import Path
@@ -25,8 +29,8 @@ ALLOWED_HOSTS = ['127.0.0.1', '192.168.1.39', 'localhost', '0.0.0.0']
 # 💡 CONFIGURACIÓN PARA DJANGO DEBUG TOOLBAR
 # Estas IPs tienen permiso para ver la barra de depuración.
 INTERNAL_IPS = [
-	"127.0.0.1", 
-	"192.168.1.39",
+        "127.0.0.1", 
+        "192.168.1.39",
 ]
 
 
@@ -35,28 +39,25 @@ INTERNAL_IPS = [
 # ----------------------------------------------------------------------
 
 INSTALLED_APPS = [
-	# Aplicaciones Core de Django
-	'django.contrib.admin',
-	'django.contrib.auth',
-	'django.contrib.contenttypes',
-	'django.contrib.sessions',
-	'django.contrib.messages',
-	'django.contrib.staticfiles',
-	
-	# 💡 HERRAMIENTA DE DEPURACIÓN
-	'debug_toolbar', 
-	
-	# ✅ Necesario para resolver el ModuleNotFoundError
-	'django_bootstrap5', 
+        # Aplicaciones Core de Django
+        'django.contrib.admin',
+        'django.contrib.auth',
+        'django.contrib.contenttypes',
+        'django.contrib.sessions',
+        'django.contrib.messages',
+        'django.contrib.staticfiles',
 
-	'crispy_bootstrap5',
-	# Herramientas de terceros
-	# 'widget_tweaks',  <-- 🛑 COMENTADO: No es compatible con tu versión de Python/pip.
-	'django.contrib.humanize',
-	
-	# Mis aplicaciones
-	'mi_finanzas', 
-	'crispy_forms', 
+        # 💡 HERRAMIENTAS DE DEPURACIÓN Y ESTILO
+        'debug_toolbar', 
+        'django.contrib.humanize', # Para formato de números y fechas
+
+        # ✅ LIBRERÍAS DE FORMULARIOS (Crispy Forms para Bootstrap 5)
+        'crispy_forms', 
+        'crispy_bootstrap5',
+        'django_bootstrap5', # Requerido si lo usas en base.html
+
+        # Mis aplicaciones locales
+        'mi_finanzas', 
 ]
 
 
@@ -65,18 +66,18 @@ INSTALLED_APPS = [
 # ----------------------------------------------------------------------
 
 MIDDLEWARE = [
-	'django.middleware.security.SecurityMiddleware',
-	
-	# 💡 MIDDLEWARE DE DEPURACIÓN (Debe estar aquí, después de SecurityMiddleware)
-	'debug_toolbar.middleware.DebugToolbarMiddleware', 
-	
-	'django.contrib.sessions.middleware.SessionMiddleware',
-	'django.middleware.common.CommonMiddleware',
-	'django.middleware.csrf.CsrfViewMiddleware',
-	'django.contrib.auth.middleware.AuthenticationMiddleware',
-	'django.contrib.messages.middleware.MessageMiddleware',
-	'django.middleware.clickjacking.XFrameOptionsMiddleware',
-	
+        'django.middleware.security.SecurityMiddleware',
+
+        # 💡 MIDDLEWARE DE DEPURACIÓN (Debe estar aquí, después de SecurityMiddleware)
+        'debug_toolbar.middleware.DebugToolbarMiddleware', 
+
+        'django.contrib.sessions.middleware.SessionMiddleware',
+        'django.middleware.common.CommonMiddleware',
+        'django.middleware.csrf.CsrfViewMiddleware',
+        'django.contrib.auth.middleware.AuthenticationMiddleware',
+        'django.contrib.messages.middleware.MessageMiddleware',
+        'django.middleware.clickjacking.XFrameOptionsMiddleware',
+
 ]
 
 
@@ -88,20 +89,20 @@ ROOT_URLCONF = 'gestor_financiero_final.urls'
 # ----------------------------------------------------------------------
 
 TEMPLATES = [
-	{
-		'BACKEND': 'django.template.backends.django.DjangoTemplates',
-		# Carpeta 'templates' en la raíz para base.html
-		'DIRS': [BASE_DIR / 'templates'], 
-		'APP_DIRS': True,
-		'OPTIONS': {
-			'context_processors': [
-				'django.template.context_processors.debug',
-				'django.template.context_processors.request',
-				'django.contrib.auth.context_processors.auth',
-				'django.contrib.messages.context_processors.messages',
-			],
-		},
-	},
+        {
+            'BACKEND': 'django.template.backends.django.DjangoTemplates',
+            # Carpeta 'templates' en la raíz para base.html
+            'DIRS': [BASE_DIR / 'templates'], 
+            'APP_DIRS': True,
+            'OPTIONS': {
+                'context_processors': [
+                    'django.template.context_processors.debug',
+                    'django.template.context_processors.request',
+                    'django.contrib.auth.context_processors.auth',
+                    'django.contrib.messages.context_processors.messages',
+                ],
+            },
+        },
 ]
 
 WSGI_APPLICATION = 'gestor_financiero_final.wsgi.application'
@@ -112,11 +113,11 @@ WSGI_APPLICATION = 'gestor_financiero_final.wsgi.application'
 # ----------------------------------------------------------------------
 
 DATABASES = {
-	'default': {
-		# CRÍTICO: Usar SQLite para eliminar el fallo de conexión a PostgreSQL.
-		'ENGINE': 'django.db.backends.sqlite3',
-		'NAME': BASE_DIR / 'db.sqlite3',
-	}
+        'default': {
+            # CRÍTICO: Usar SQLite para eliminar el fallo de conexión a PostgreSQL.
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
 }
 
 
@@ -125,18 +126,18 @@ DATABASES = {
 # ----------------------------------------------------------------------
 
 AUTH_PASSWORD_VALIDATORS = [
-	{
-		'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
-	},
-	{
-		'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
-	},
-	{
-		'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
-	},
-	{
-		'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
-	},
+        {
+            'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+        },
+        {
+            'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        },
+        {
+            'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+        },
+        {
+            'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+        },
 ]
 
 # URL a la que se redirige a usuarios no autenticados.
@@ -171,11 +172,14 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# ----------------------------------------------------------------------
+# CONFIGURACIÓN DE CRISPY FORMS (CRÍTICO)
+# ----------------------------------------------------------------------
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5" 
-
 
 
 # =============================================================
 # CONFIGURACIÓN DE SEGURIDAD PARA CARGAR CDN (solución final)
 # =============================================================
+
