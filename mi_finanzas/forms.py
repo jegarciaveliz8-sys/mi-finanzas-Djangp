@@ -35,6 +35,10 @@ class TransaccionForm(forms.ModelForm):
     fecha = forms.DateField(
         widget=DateInput(attrs={'type': 'date', 'class': 'form-control'})
     )
+
+
+
+
     
      def __init__(self, *args, **kwargs):
         request = kwargs.pop('request', None)
