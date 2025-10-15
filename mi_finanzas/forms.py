@@ -16,12 +16,11 @@ User = get_user_model()
 class CuentaForm(forms.ModelForm):
     class Meta:
         model = Cuenta
-        # 🔑 CORRECCIÓN: CAMBIADO 'balance' a 'saldo' (debe coincidir con models.py)
+        # Usando 'saldo' tal como se corrigió previamente.
         fields = ['nombre', 'tipo', 'saldo'] 
         widgets = {
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Principal'}),
             'tipo': Select(attrs={'class': 'form-select'}), 
-            # 🔑 CORRECCIÓN: CAMBIADO 'balance' a 'saldo'
             'saldo': NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
         }
 
@@ -32,7 +31,7 @@ class CuentaForm(forms.ModelForm):
 class TransaccionForm(forms.ModelForm):
     # Sobrescribe la fecha para asegurar el widget HTML5 type='date'
     fecha = forms.DateField(
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+        widget=DateInput(attrs={'type': 'date', 'class': 'form-control'})
     )
     
     def __init__(self, *args, **kwargs):
@@ -85,8 +84,9 @@ class TransferenciaForm(forms.Form):
         decimal_places=2,
         widget=NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'placeholder': '100.00'})
     )
+    # ✅ CORRECCIÓN/ADICIÓN: Se añade el widget de fecha para asegurar el input de calendario.
     fecha = forms.DateField(
-        widget=forms.DateInput(attrs={'type': 'date', 'class': 'form-control'})
+        widget=DateInput(attrs={'type': 'date', 'class': 'form-control', 'value': timezone.localdate()})
     )
     descripcion = forms.CharField(
         max_length=255, 
@@ -107,10 +107,15 @@ class TransferenciaForm(forms.Form):
             cuentas_del_usuario = Cuenta.objects.filter(usuario=user)
             self.fields['cuenta_origen'].queryset = cuentas_del_usuario
             self.fields['cuenta_destino'].queryset = cuentas_del_usuario
-            
+        
+        # Aplicación de estilos para Select
         self.fields['cuenta_origen'].widget.attrs.update({'class': 'form-select'})
         self.fields['cuenta_destino'].widget.attrs.update({'class': 'form-select'})
         
+        # Inicializa la fecha con el día actual si no se está cargando data (instance)
+        if not self.is_bound:
+            self.fields['fecha'].initial = timezone.localdate()
+
     def clean(self):
         cleaned_data = super().clean()
         origen = cleaned_data.get('cuenta_origen')
@@ -181,7 +186,7 @@ class CategoriaForm(forms.ModelForm):
             if field.widget.__class__ in [Select, forms.Select]:
                 field.widget.attrs.update({'class': 'form-select'})
             elif field.widget.__class__ in [TextInput, forms.TextInput]:
-                 field.widget.attrs.update({'class': 'form-control'})
+                field.widget.attrs.update({'class': 'form-control'})
 
     class Meta:
         model = Categoria
@@ -191,3 +196,4 @@ class CategoriaForm(forms.ModelForm):
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Alimentación'}),
             'tipo': Select(attrs={'class': 'form-select'}),
         }
+
