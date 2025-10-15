@@ -29,23 +29,19 @@ class CuentaForm(forms.ModelForm):
 # ----------------------------------------------------
 # 2. Formulario de Transacciones (CRUD)
 # ----------------------------------------------------
-
 class TransaccionForm(forms.ModelForm):
     # Sobrescribe la fecha para asegurar el widget HTML5 type='date'
     fecha = forms.DateField(
         widget=DateInput(attrs={'type': 'date', 'class': 'form-control'})
     )
-
-
-
-
     
-     def __init__(self, *args, **kwargs):
-        request = kwargs.pop('request', None)
+    # 🔑 CORRECCIÓN DE SANGRÍA AQUÍ (Sólo 4 espacios) 🔑
+    def __init__(self, *args, **kwargs):
+        # Acepta 'user' o 'request' para filtrar querysets
+        request = kwargs.pop('request', None) 
         user = kwargs.pop('user', None) 
         
         super().__init__(*args, **kwargs) 
- 
 
         if user is None and request and request.user.is_authenticated:
             user = request.user
@@ -67,6 +63,11 @@ class TransaccionForm(forms.ModelForm):
             'tipo': Select(attrs={'class': 'form-select'}),
             'descripcion': Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
+
+# ----------------------------------------------------
+# 3. Formulario de Transferencia (Custom Form)
+# ... (El resto del archivo)
+
 
 # ----------------------------------------------------
 # 3. Formulario de Transferencia (Custom Form)
