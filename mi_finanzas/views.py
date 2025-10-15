@@ -34,18 +34,19 @@ class RegistroUsuario(CreateView):
 # VISTAS DE LISTAS Y RESUMEN (Dashboard)
 # ========================================================
 
+import json # Necesario para serializar el JSON del gráfico
+
 @login_required
 def resumen_financiero(request):
     """Muestra el resumen financiero principal (Dashboard)."""
     cuentas = Cuenta.objects.filter(usuario=request.user)
     
     # Cálculo del saldo total (Corregido con Decimal(0))
-    saldo_total = cuentas.aggregate(total=Coalesce(Sum('saldo'), Decimal(0)))['total'] 
+    saldo_total = cuentas.aggregate(total=Coalesce(Sum('saldo'), Decimal(0), output_field=DecimalField()))['total'] 
     
-    # --- LÓGICA AGREGADA PARA INGRESOS Y GASTOS DEL MES ---
+    # --- LÓGICA DE FECHAS Y TRANSACCIONES DEL MES ---
     hoy = date.today()
     primer_dia_mes = hoy.replace(day=1)
-    # Calculamos el primer día del mes siguiente para el filtro de rango
     primer_dia_siguiente_mes = primer_dia_mes + relativedelta(months=1) 
     
     transacciones_mes = Transaccion.objects.filter(
@@ -54,36 +55,96 @@ def resumen_financiero(request):
         fecha__lt=primer_dia_siguiente_mes
     )
     
-    # Agregación de Ingresos y Gastos (Usando Q y DecimalField)
+    # Agregación de Ingresos y Gastos
     totales_mes = transacciones_mes.aggregate(
         ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0), output_field=DecimalField()),
+        # Los gastos se guardan como negativos, así que los sumamos para obtener el total negativo.
         gastos=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField())
     )
-    # --------------------------------------------------------
     
-    # Obtener el presupuesto activo (ejemplo)
-    presupuestos_activos = Presupuesto.objects.filter(
+    # --- 1. LÓGICA PARA ÚLTIMAS TRANSACCIONES ---
+    ultimas_transacciones = Transaccion.objects.filter(usuario=request.user).order_by('-fecha', '-hora')[:5]
+
+    # --- 2. LÓGICA PARA GRÁFICO (Gastos por Categoría) ---
+    gastos_por_categoria = transacciones_mes.filter(monto__lt=0, categoria__isnull=False).values(
+        'categoria__nombre'
+    ).annotate(
+        # Usar abs() para obtener el valor positivo del gasto
+        gasto=Coalesce(Sum('monto'), Decimal(0), output_field=DecimalField()) * -1
+    ).order_by('-gasto')
+
+    chart_data = {
+        'labels': [item['categoria__nombre'] for item in gastos_por_categoria],
+        'data': [float(item['gasto']) for item in gastos_por_categoria], # Convertir Decimal a float para JSON
+    }
+    
+    # Convertir a JSON seguro para pasar a la plantilla
+    chart_data_json = json.dumps(chart_data)
+
+    # --- 3. LÓGICA DE PRESUPUESTOS (Simple) ---
+    # Asumo que solo buscas un presupuesto o lista de presupuestos activos para el dashboard.
+    # Necesitarás expandir esta lógica si manejas múltiples presupuestos por categoría.
+    presupuestos_activos_list = Presupuesto.objects.filter(
         usuario=request.user, 
-        # Si Presupuesto tiene campos de fecha, los podrías descomentar aquí
-        # fecha_inicio__lte=date.today(),
-        # fecha_fin__gte=date.today()
-    ).first()
+        # Añade lógica de fecha si Presupuesto tiene fecha_inicio y fecha_fin
+    )
     
-    transferencia_form = TransferenciaForm(user=request.user)
-    
+    # Para la plantilla, debes calcular los valores gastados y restantes
+    resultados_presupuesto = []
+    for presupuesto in presupuestos_activos_list:
+        gasto_actual_q = Transaccion.objects.filter(
+            usuario=request.user,
+            categoria=presupuesto.categoria,
+            fecha__gte=primer_dia_mes, # Asumo que el presupuesto es mensual
+            fecha__lt=primer_dia_siguiente_mes,
+            monto__lt=0
+        ).aggregate(
+            total_gastado=Coalesce(Sum('monto'), Decimal(0), output_field=DecimalField())
+        )['total_gastado']
+        
+        gasto_actual = abs(gasto_actual_q)
+        restante = presupuesto.monto_limite - gasto_actual
+        porcentaje = (gasto_actual / presupuesto.monto_limite) * 100 if presupuesto.monto_limite > 0 else 0
+        
+        # Lógica simple de color de barra
+        color_barra = 'bg-success'
+        if porcentaje > 75:
+            color_barra = 'bg-warning'
+        if porcentaje > 100:
+            color_barra = 'bg-danger'
+
+        resultados_presupuesto.append({
+            'pk': presupuesto.pk,
+            'categoria': presupuesto.categoria,
+            'monto_limite': presupuesto.monto_limite,
+            'gasto_actual': gasto_actual,
+            'restante': restante,
+            'porcentaje': porcentaje,
+            'color_barra': color_barra,
+        })
+    # -----------------------------------------------
+
     context = {
         'cuentas': cuentas,
         'saldo_total': saldo_total,
         
-        # Nuevos datos para el panel:
+        # Datos del mes
         'ingresos_mes': totales_mes['ingresos'],
-        'gastos_mes': abs(totales_mes['gastos']), # Usamos abs() para mostrar el gasto como valor positivo
-        'mes_actual_str': hoy.strftime("%B %Y"), # Ejemplo: October 2025
+        'gastos_mes': abs(totales_mes['gastos']), 
+        'mes_actual_str': hoy.strftime("%B %Y"),
         
-        'presupuesto_activo': presupuestos_activos,
-        'form': transferencia_form,  # ¡Inyectado para el modal!
+        # Nuevos datos para el panel
+        'ultimas_transacciones': ultimas_transacciones,
+        'chart_data_json': chart_data_json, # Para el gráfico de gastos
+        'resultados_presupuesto': resultados_presupuesto, # Para la sección de presupuestos
+        
+        # Datos de formulario y estado (si los usas)
+        'form': TransferenciaForm(user=request.user),
+        'estado_financiero': {'tipo': 'alert-info', 'mensaje': 'Bienvenido a tu resumen financiero.', 'icono': 'fas fa-info-circle'}
     }
     return render(request, 'mi_finanzas/resumen_financiero.html', context)
+
+
 
 
 @method_decorator(login_required, name='dispatch')
