@@ -33,12 +33,13 @@
                             <a class="nav-link" href="{% url 'mi_finanzas:transacciones_lista' %}">Historial</a>
                         </li>
                         <li class="nav-item">
+                            {# Este enlace es CORRECTO y apunta a la vista para añadir Transacciones (Ingreso/Gasto) #}
                             <a class="nav-link" href="{% url 'mi_finanzas:anadir_transaccion' %}">
                                 <i class="fas fa-plus-circle me-1"></i> Añadir Transacción
                             </a>
                         </li>
 
-                        {# Enlace al Manual del Usuario (CORREGIDO) #}
+                        {# Enlace al Manual del Usuario #}
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'mi_finanzas:manual_page' %}" target="_blank"> 
                                 <i class="fas fa-book me-1"></i> Manual
@@ -60,7 +61,8 @@
                             <a class="btn btn-sm btn-outline-light me-2" href="{% url 'auth:login' %}">Iniciar Sesión</a>
                         </li>
                         <li class="nav-item">
-                            <a class="btn btn-sm btn-warning" href="{% url 'signup' %}">Registrarse</a> 
+                            {# CORRECCIÓN: Asumo que la URL de registro está en 'mi_finanzas:registro' #}
+                            <a class="btn btn-sm btn-warning" href="{% url 'mi_finanzas:registro' %}">Registrarse</a> 
                         </li>
                     {% endif %}
                 </ul>
@@ -74,27 +76,7 @@
         {% endblock content %}
     </main>
 
-    {# ========================================================= #}
-    {# 🛑 MODAL DE TRANSFERENCIA (CORREGIDO PARA EVITAR TYPERROR) 🛑 #}
-    {# Se incluye el formulario SÓLO si la vista lo pasa al contexto (ej. Resumen Financiero) #}
-    {# ========================================================= #}
-    <div class="modal fade" id="transferModal" tabindex="-1" aria-labelledby="transferModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-dark text-white">
-                    <h5 class="modal-title" id="transferModalLabel">Nueva Transferencia de Fondos</h5>
-                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    {% if transfer_form %} 
-                        {% include 'mi_finanzas/transferencia_form_snippet.html' %} 
-                    {% else %}
-                        <p class="text-muted">El formulario de transferencia no se ha cargado para esta página.</p>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
+    {# Los MODALS GLOBALES DEBEN EVITARSE en BASE.HTML. El modal de transferencia se incluye SOLO en resumen_financiero.html #}
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -104,4 +86,3 @@
     {% block extra_js %}{% endblock %}
 </body>
 </html>
-
