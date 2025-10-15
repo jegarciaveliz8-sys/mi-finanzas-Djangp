@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load humanize %} 
-{% load widget_tweaks %}  {# ✅ CAMBIO CRÍTICO: Usamos widget_tweaks para forzar el diseño de Bootstrap. #}
+{% load widget_tweaks %}
 
 {% block title %}Resumen Financiero{% endblock %}
 
@@ -9,7 +9,7 @@
     <div class="container mt-5">
         <h1 class="mb-4">Panel de Control Financiero</h1>
 
-        {# 🛑 INICIO DE LA SECCIÓN DE BOTONES DE ACCIÓN CORREGIDA 🛑 #}
+        {# 🛑 INICIO DE LA SECCIÓN DE BOTONES DE ACCIÓN 🛑 #}
         <div class="d-flex mb-4 gap-2 flex-wrap">
             {# Botón para Añadir Transacción (Ingreso/Gasto) #}
             <a href="{% url 'mi_finanzas:anadir_transaccion' %}" class="btn btn-success">
@@ -21,7 +21,7 @@
                 <i class="fas fa-exchange-alt me-2"></i> Realizar Transferencia
             </button>
         </div>
-        {# 🛑 FIN DE LA SECCIÓN DE BOTONES DE ACCIÓN CORREGIDA 🛑 #}
+        {# 🛑 FIN DE LA SECCIÓN DE BOTONES DE ACCIÓN 🛑 #}
 
         {# Alerta de Salud Financiera #}
         <div class="alert {{ estado_financiero.tipo|default:'alert-info' }}" role="alert">
@@ -150,17 +150,17 @@
                             <small class="text-muted d-block">{{ transaccion.fecha|date:"d M, Y" }} en {{ transaccion.cuenta.nombre }}</small>
                         </div>
                         <span class="badge 
-                            {# Color: Usamos el TIPO de transacción: INGRESO o TRANSFERENCIA_RECIBIDA es VERDE. Todo lo demás (EGRESO, TRANSFERENCIA_ENVIADA) es ROJO #}
+                            {# Color: Usamos el TIPO de transacción #}
                             {% if transaccion.tipo == 'INGRESO' or transaccion.tipo == 'TRANSFERENCIA_RECIBIDA' %}
                                 bg-success
                             {% else %}
                                 bg-danger
                             {% endif %}
                         p-2 fs-6">
-                            {# Signo: Usamos el TIPO de transacción #}
+                            {# Signo #}
                             {% if transaccion.tipo == 'INGRESO' or transaccion.tipo == 'TRANSFERENCIA_RECIBIDA' %}+{% else %}-{% endif %}
                             
-                            {# Valor: Mostramos el valor absoluto con formato #}
+                            {# Valor #}
                             ${{ transaccion.monto|floatformat:2|intcomma|cut:"-" }} 
                         </span>
                     </li>
@@ -174,7 +174,7 @@
     
     
     {# -------------------------------------------------------- #}
-    {# MODAL PARA REALIZAR TRANSFERENCIA (Renderizado Manual con Widget Tweaks) #}
+    {# MODAL PARA REALIZAR TRANSFERENCIA (Código CORREGIDO) #}
     {# -------------------------------------------------------- #}
     <div class="modal fade" id="transferModal" tabindex="-1" aria-labelledby="transferModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -188,47 +188,66 @@
                     {% csrf_token %}
                     <div class="modal-body">
                         {% if form_transferencia %}
-                            <div class="alert alert-info small" role="alert">
-                                Asegúrate de que el monto es positivo.
-                            </div>
+
+                            {# Errores globales del formulario, si los hay #}
+                            {% for error in form_transferencia.non_field_errors %}
+                                <div class="alert alert-danger">{{ error }}</div>
+                            {% endfor %}
                             
-                            {# 🔑 RENDERIZADO MANUAL CON COLUMNAS USANDO WIDGET TWEAKS #}
+                            {# FILA 1: Cuentas Origen y Destino #}
                             <div class="row">
                                 <div class="col-md-6">
                                     <div class="mb-3">
-                                        <label for="{{ form_transferencia.cuenta.id_for_label }}" class="form-label">Cuenta de Origen</label>
-                                        {% render_field form_transferencia.cuenta class="form-select" %}
+                                        <label for="{{ form_transferencia.cuenta_origen.id_for_label }}" class="form-label">Cuenta de Origen</label>
+                                        {# ✅ CORRECCIÓN DE NOMBRE DE CAMPO: 'cuenta' -> 'cuenta_origen' #}
+                                        {% render_field form_transferencia.cuenta_origen class="form-select" %}
+                                        {% for error in form_transferencia.cuenta_origen.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-3">
                                         <label for="{{ form_transferencia.cuenta_destino.id_for_label }}" class="form-label">Cuenta de Destino</label>
                                         {% render_field form_transferencia.cuenta_destino class="form-select" %}
+                                        {% for error in form_transferencia.cuenta_destino.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
                                     </div>
                                 </div>
                             </div>
                             
-                            {# Campos que ocupan el ancho completo #}
-                            <div class="mb-3">
-                                <label for="{{ form_transferencia.monto.id_for_label }}" class="form-label">Monto a transferir</label>
-                                {% render_field form_transferencia.monto class="form-control" %}
+                            {# FILA 2: Monto y Fecha (Ahora en dos columnas) #}
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form_transferencia.monto.id_for_label }}" class="form-label">Monto a transferir</label>
+                                        {% render_field form_transferencia.monto class="form-control" %}
+                                        {% for error in form_transferencia.monto.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label for="{{ form_transferencia.fecha.id_for_label }}" class="form-label">Fecha</label>
+                                        {% render_field form_transferencia.fecha class="form-control" %}
+                                        {% for error in form_transferencia.fecha.errors %}
+                                            <div class="text-danger small">{{ error }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
                             </div>
-                            
-                            <div class="mb-3">
-                                <label for="{{ form_transferencia.fecha.id_for_label }}" class="form-label">Fecha</label>
-                                {% render_field form_transferencia.fecha class="form-control" %}
-                            </div>
-                            
+    
+                            {# FILA 3: Descripción (Ancho completo) #}
                             <div class="mb-3">
                                 <label for="{{ form_transferencia.descripcion.id_for_label }}" class="form-label">Descripción</label>
                                 {% render_field form_transferencia.descripcion class="form-control" rows="3" %}
+                                {% for error in form_transferencia.descripcion.errors %}
+                                    <div class="text-danger small">{{ error }}</div>
+                                {% endfor %}
                             </div>
 
-                            {# Muestra errores no de campo (opcional) #}
-                            {% for error in form_transferencia.non_field_errors %}
-                                <div class="alert alert-danger">{{ error }}</div>
-                            {% endfor %}
-                            
                         {% else %}
                             <p class="text-danger">El formulario de transferencia no se ha cargado para esta página.</p>
                         {% endif %}
