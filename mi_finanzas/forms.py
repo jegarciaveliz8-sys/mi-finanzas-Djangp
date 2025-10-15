@@ -3,6 +3,8 @@ from django.forms.widgets import TextInput, NumberInput, Select, Textarea, DateI
 from django.utils import timezone
 import calendar 
 from django.contrib.auth import get_user_model
+from crispy_forms.helper import FormHelper
+from crispy_forms.layout import Layout, Submit, Row, Column, Fieldset # Agregué Fieldset para agrupar
 
 # Importaciones de Modelos (Asegúrate de que estos modelos existan en models.py)
 from .models import Cuenta, Transaccion, Categoria, Presupuesto 
@@ -34,12 +36,12 @@ class TransaccionForm(forms.ModelForm):
         widget=DateInput(attrs={'type': 'date', 'class': 'form-control'})
     )
     
-    def __init__(self, *args, **kwargs):
-        # Acepta 'user' o 'request' para filtrar querysets
-        request = kwargs.pop('request', None) 
+     def __init__(self, *args, **kwargs):
+        request = kwargs.pop('request', None)
         user = kwargs.pop('user', None) 
         
         super().__init__(*args, **kwargs) 
+ 
 
         if user is None and request and request.user.is_authenticated:
             user = request.user
