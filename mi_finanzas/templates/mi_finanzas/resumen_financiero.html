@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% load humanize %} 
+{% load crispy_forms_tags %}  {# ✅ CORRECCIÓN: Movido aquí para asegurar la carga del tag. #}
 
 {% block title %}Resumen Financiero{% endblock %}
 
@@ -10,7 +11,7 @@
 
         {# 🛑 INICIO DE LA SECCIÓN DE BOTONES DE ACCIÓN CORREGIDA 🛑 #}
         <div class="d-flex mb-4 gap-2 flex-wrap">
-            {# Botón para Añadir Transacción (Ingreso/Gasto) - ¡CORREGIDO para ir a una URL! #}
+            {# Botón para Añadir Transacción (Ingreso/Gasto) #}
             <a href="{% url 'mi_finanzas:anadir_transaccion' %}" class="btn btn-success">
                 <i class="fas fa-plus-circle me-2"></i> Añadir Transacción
             </a>
@@ -170,7 +171,6 @@
         </div>
 
     </div> 
-    {# Cierra el div del contenedor principal (container mt-5) #}
     
     
     {# -------------------------------------------------------- #}
@@ -192,8 +192,7 @@
                             Asegúrate de que el monto es positivo. La aplicación gestionará el débito de la cuenta de origen.
                         </div>
                         
-                        {# 🔑 CORRECCIÓN CRÍTICA: Reemplazado el bucle manual con la etiqueta CRISPY #}
-                        {% load crispy_forms_tags %} 
+                        {# 🔑 RENDERIZADO DEL FORMULARIO: Usa la etiqueta Crispy #}
                         {% crispy form_transferencia %}
                         
                     {% else %}
@@ -202,7 +201,6 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    {# Nota: El botón Submit debería ser definido en el FormHelper. Si no lo está, lo dejamos aquí. #}
                     <button type="submit" class="btn btn-success">Realizar Transferencia</button>
                 </div>
             </form>
@@ -210,7 +208,6 @@
     </div>
 </div>
 {# -------------------------------------------------------- #}
-
 
 
 {% endblock %} 
