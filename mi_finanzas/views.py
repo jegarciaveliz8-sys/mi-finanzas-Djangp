@@ -63,7 +63,8 @@ def resumen_financiero(request):
     )
     
     # --- 1. LÓGICA PARA ÚLTIMAS TRANSACCIONES ---
-    ultimas_transacciones = Transaccion.objects.filter(usuario=request.user).order_by('-fecha', '-hora')[:5]
+    # CORRECCIÓN: Se elimina 'hora' del ordenamiento
+    ultimas_transacciones = Transaccion.objects.filter(usuario=request.user).order_by('-fecha')[:5]
 
     # --- 2. LÓGICA PARA GRÁFICO (Gastos por Categoría) ---
     gastos_por_categoria = transacciones_mes.filter(monto__lt=0, categoria__isnull=False).values(
@@ -171,7 +172,8 @@ class TransaccionesListView(ListView):
 
     def get_queryset(self):
         # Filtra las transacciones solo para el usuario actual y las ordena por fecha
-        return Transaccion.objects.filter(usuario=self.request.user).order_by('-fecha', '-hora')
+        # CORRECCIÓN: Se elimina 'hora' del ordenamiento
+        return Transaccion.objects.filter(usuario=self.request.user).order_by('-fecha')
 
 # ========================================================
 # VISTA DE TRANSFERENCIA (Lógica de Negocio)
