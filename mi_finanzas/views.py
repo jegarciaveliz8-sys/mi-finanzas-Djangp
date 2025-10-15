@@ -6,11 +6,12 @@ from django.utils.decorators import method_decorator
 from django.urls import reverse_lazy
 from django.contrib import messages
 from django.db import transaction
-from django.db.models import Sum, DecimalField # Importar DecimalField para seguridad
+# CORRECCIÓN: Se añade Q para los filtros y DecimalField para la seguridad
+from django.db.models import Sum, DecimalField, Q 
 from django.db.models.functions import Coalesce
 from datetime import date
 from dateutil.relativedelta import relativedelta
-from decimal import Decimal # <--- NUEVA IMPORTACIÓN PARA SOLUCIONAR EL ERROR DE TIPO
+from decimal import Decimal 
 
 # ========================================================
 # 🔑 IMPORTACIONES CONSOLIDADAS DE MODELOS Y FORMULARIOS
@@ -38,14 +39,32 @@ def resumen_financiero(request):
     """Muestra el resumen financiero principal (Dashboard)."""
     cuentas = Cuenta.objects.filter(usuario=request.user)
     
-    # Cálculo simple del saldo total
-    # CORRECCIÓN: Usar Decimal(0) para evitar la mezcla de Decimal/Float
+    # Cálculo del saldo total (Corregido con Decimal(0))
     saldo_total = cuentas.aggregate(total=Coalesce(Sum('saldo'), Decimal(0)))['total'] 
+    
+    # --- LÓGICA AGREGADA PARA INGRESOS Y GASTOS DEL MES ---
+    hoy = date.today()
+    primer_dia_mes = hoy.replace(day=1)
+    # Calculamos el primer día del mes siguiente para el filtro de rango
+    primer_dia_siguiente_mes = primer_dia_mes + relativedelta(months=1) 
+    
+    transacciones_mes = Transaccion.objects.filter(
+        usuario=request.user, 
+        fecha__gte=primer_dia_mes,
+        fecha__lt=primer_dia_siguiente_mes
+    )
+    
+    # Agregación de Ingresos y Gastos (Usando Q y DecimalField)
+    totales_mes = transacciones_mes.aggregate(
+        ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0), output_field=DecimalField()),
+        gastos=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField())
+    )
+    # --------------------------------------------------------
     
     # Obtener el presupuesto activo (ejemplo)
     presupuestos_activos = Presupuesto.objects.filter(
         usuario=request.user, 
-        # Si Presupuesto no tiene estos campos, debes comentar estas líneas:
+        # Si Presupuesto tiene campos de fecha, los podrías descomentar aquí
         # fecha_inicio__lte=date.today(),
         # fecha_fin__gte=date.today()
     ).first()
@@ -55,6 +74,12 @@ def resumen_financiero(request):
     context = {
         'cuentas': cuentas,
         'saldo_total': saldo_total,
+        
+        # Nuevos datos para el panel:
+        'ingresos_mes': totales_mes['ingresos'],
+        'gastos_mes': abs(totales_mes['gastos']), # Usamos abs() para mostrar el gasto como valor positivo
+        'mes_actual_str': hoy.strftime("%B %Y"), # Ejemplo: October 2025
+        
         'presupuesto_activo': presupuestos_activos,
         'form': transferencia_form,  # ¡Inyectado para el modal!
     }
@@ -411,8 +436,8 @@ def reportes_financieros(request):
     # CORRECCIÓN: Usar Decimal(0) y especificar output_field=DecimalField() 
     # para evitar el error de tipos mixtos (DecimalField con 0/int/float).
     totales = transacciones.aggregate(
-        ingresos=Coalesce(Sum('monto', filter='monto__gt=0'), Decimal(0), output_field=DecimalField()),
-        egresos=Coalesce(Sum('monto', filter='monto__lt=0'), Decimal(0), output_field=DecimalField())
+        ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0), output_field=DecimalField()),
+        egresos=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField())
     )
     
     context = {
@@ -424,3 +449,4 @@ def reportes_financieros(request):
     }
     
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
+
