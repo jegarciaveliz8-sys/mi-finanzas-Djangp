@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Lista de Presupuestos{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Presupuestos Mensuales</h2>
+        {# Asume que la URL para crear presupuesto se llama 'crear_presupuesto' #}
+        <a href="{% url 'mi_finanzas:crear_presupuesto' %}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Crear Nuevo Presupuesto
+        </a>
+    </div>
+
+    {# 1. Comprobación de existencia de presupuestos #}
+    {% if presupuestos %}
+        <div class="row">
+            {% for presupuesto in presupuestos %}
+                <div class="col-md-6 mb-4">
+                    <div class="card shadow-sm">
+                        <div class="card-body">
+                            <h5 class="card-title text-primary">
+                                {{ presupuesto.categoria.nombre }}
+                            </h5>
+                            <h6 class="card-subtitle mb-2 text-muted">
+                                {{ presupuesto.get_mes_display }} {{ presupuesto.anio }}
+                            </h6>
+
+                            <p class="card-text">
+                                Límite: **${{ presupuesto.monto_limite|floatformat:2 }}**
+                            </p>
+
+                            {# Asume que tienes un atributo 'gastado' en cada objeto Presupuesto (calculado en views.py) #}
+                            {% with gastado=presupuesto.gastado %}
+                                <p class="card-text">
+                                    Gastado: **${{ gastado|floatformat:2 }}**
+                                </p>
+                                
+                                {# Cálculo del porcentaje y barra de progreso #}
+                                {% with porcentaje_uso=(gastado|divide:presupuesto.monto_limite)|mul:100 %}
+                                    <div class="progress mb-2" style="height: 25px;">
+                                        <div class="progress-bar 
+                                            {% if porcentaje_uso > 100 %}bg-danger{% elif porcentaje_uso > 75 %}bg-warning{% else %}bg-success{% endif %}" 
+                                            role="progressbar" style="width: {{ porcentaje_uso|floatformat:0 }}%;" 
+                                            aria-valuenow="{{ porcentaje_uso|floatformat:0 }}" aria-valuemin="0" aria-valuemax="100">
+                                            {{ porcentaje_uso|floatformat:0 }}%
+                                        </div>
+                                    </div>
+                                {% endwith %}
+                            {% endwith %}
+
+                            {# Enlace para editar el presupuesto #}
+                            <a href="{% url 'mi_finanzas:presupuesto_editar' pk=presupuesto.pk %}" class="btn btn-sm btn-outline-secondary mt-3">Editar</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        {# 2. Mensaje si no hay presupuestos #}
+        <div class="alert alert-info text-center" role="alert">
+            No tienes presupuestos creados. ¡Empieza uno ahora!
+        </div>
+    {% endif %}
+</div>
+{% endblock content %}
+
