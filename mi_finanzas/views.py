@@ -12,7 +12,7 @@ from datetime import date
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal 
 import json 
-import calendar # Necesario para PresupuestoForm en el dashboard
+import calendar 
 
 # ========================================================
 # 🔑 IMPORTACIONES CONSOLIDADAS DE MODELOS Y FORMULARIOS
@@ -40,7 +40,14 @@ def resumen_financiero(request):
     """Muestra el resumen financiero principal (Dashboard)."""
     cuentas = Cuenta.objects.filter(usuario=request.user)
     
-    # Cálculo del saldo total
+    # --- 🔑 CORRECCIÓN CRÍTICA: CÁLCULO DEL SALDO TOTAL NETO 🔑 ---
+    # Se debe sumar el saldo de las cuentas de activo y restar el saldo de las cuentas de pasivo.
+    # El filtro asume que las cuentas de Pasivo son aquellas que NO tienen los tipos de Activo.
+    
+    # NOTA: Si el saldo de las cuentas de pasivo YA es negativo en la DB, solo se requiere la suma general.
+    # Como te aseguraste que el saldo de las deudas sea negativo con el forms.py corregido, 
+    # la suma simple debería ser suficiente para el Saldo Total Neto (ACTIVOS + PASIVOS_NEGATIVOS).
+    
     saldo_total = cuentas.aggregate(total=Coalesce(Sum('saldo'), Decimal(0), output_field=DecimalField()))['total'] 
     
     # --- LÓGICA DE FECHAS Y TRANSACCIONES DEL MES ---
@@ -56,8 +63,9 @@ def resumen_financiero(request):
     
     # Agregación de Ingresos y Gastos
     totales_mes = transacciones_mes.aggregate(
+        # Ingresos: Montos > 0
         ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0), output_field=DecimalField()),
-        # Los gastos se guardan como negativos, se suman y se obtiene el valor absoluto (positivo) para el display
+        # Gastos: Montos < 0 (la suma será negativa)
         gastos=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField())
     )
     
@@ -128,6 +136,7 @@ def resumen_financiero(request):
         
         # Datos del mes
         'ingresos_mes': totales_mes['ingresos'],
+        # Usamos abs() para mostrar los gastos como un valor positivo, como es común en UI
         'gastos_mes': abs(totales_mes['gastos']), 
         'mes_actual_str': hoy.strftime("%B %Y"),
         
@@ -178,7 +187,7 @@ class TransaccionesListView(ListView):
 def transferir_monto(request):
     """Maneja la lógica para transferir fondos entre cuentas."""
     if request.method == 'POST':
-        # ✅ CORRECCIÓN CRÍTICA: request.POST primero, user=request.user como kwarg.
+        # Instancia el formulario de transferencia con la data POST y el user
         form = TransferenciaForm(request.POST, user=request.user)
         
         if form.is_valid():
@@ -186,8 +195,11 @@ def transferir_monto(request):
             cuenta_destino = form.cleaned_data['cuenta_destino']
             monto = form.cleaned_data['monto']
 
-            # Verificación de Saldo
-            if cuenta_origen.saldo < monto:
+            # Verificación de Saldo (solo para origen, ya que el destino puede ser una deuda)
+            # Nota: Si una cuenta de origen es una deuda, su saldo es negativo (ej. -2000), 
+            # y si el monto a transferir es 100, la condición se cumple (-2000 < 100), 
+            # lo cual es correcto.
+            if cuenta_origen.saldo < monto and cuenta_origen.saldo >= 0:
                 messages.error(request, 'Saldo insuficiente en la cuenta de origen.')
                 return redirect('mi_finanzas:resumen_financiero')
 
@@ -204,7 +216,7 @@ def transferir_monto(request):
                 cuenta=cuenta_origen, 
                 tipo='EGRESO', 
                 monto=-monto,
-                descripcion=f"Transferencia Enviada a {cuenta_destino.nombre}",
+                descripcion=f"Transferencia Enviada a {cuenta_destino.nombre} ({form.cleaned_data['descripcion'] or 'Sin descripción'})",
                 fecha=form.cleaned_data['fecha']
             )
             # Transacción de Ingreso (Destino)
@@ -213,7 +225,7 @@ def transferir_monto(request):
                 cuenta=cuenta_destino, 
                 tipo='INGRESO', 
                 monto=monto,
-                descripcion=f"Transferencia Recibida de {cuenta_origen.nombre}",
+                descripcion=f"Transferencia Recibida de {cuenta_origen.nombre} ({form.cleaned_data['descripcion'] or 'Sin descripción'})",
                 fecha=form.cleaned_data['fecha']
             )
 
@@ -225,7 +237,7 @@ def transferir_monto(request):
             for field, errors in form.errors.items():
                 for error in errors:
                     messages.error(request, f"Error en {field}: {error}")
-            
+        
     # Redirigir siempre si no se pudo completar el POST (para evitar re-envíos)
     return redirect('mi_finanzas:resumen_financiero')
 
@@ -277,11 +289,15 @@ def editar_cuenta(request, pk):
     transferencia_form = TransferenciaForm(user=request.user)
     
     context = {
-        'form': transferencia_form,  # Formulario de transferencia para modal
-        'cuenta_form': form,         # Formulario principal para editar
+        # **Esta es la clave de Transferencia, solo para modals.**
+        'form': transferencia_form,  
+        # **Esta es la clave para el formulario principal de Edición/Creación.**
+        'cuenta_form': form,         
         'cuenta': cuenta
     }
 
+    # El problema está en la plantilla (editar_cuenta.html) que debe usar 'cuenta_form' 
+    # en lugar de 'form' para el formulario principal.
     return render(request, 'mi_finanzas/editar_cuenta.html', context)
 
 @login_required
@@ -294,7 +310,7 @@ def eliminar_cuenta(request, pk):
         if cuenta.saldo != 0:
             messages.error(request, f"No se puede eliminar la cuenta '{cuenta.nombre}' porque su saldo no es cero.")
             return redirect('mi_finanzas:cuentas_lista')
-            
+        
         nombre_cuenta = cuenta.nombre 
         cuenta.delete()
         messages.success(request, f"La cuenta '{nombre_cuenta}' ha sido eliminada con éxito.")
@@ -443,8 +459,6 @@ def crear_presupuesto(request):
         if form.is_valid():
             presupuesto = form.save(commit=False)
             presupuesto.usuario = request.user
-            # Asumiendo que Presupuesto tiene un campo de fecha_inicio que se calcula en el modelo/vista
-            # Si no, esta línea debe ir antes del save().
             presupuesto.save()
             messages.success(request, "¡Presupuesto creado con éxito!")
             return redirect('mi_finanzas:lista_presupuestos') 
