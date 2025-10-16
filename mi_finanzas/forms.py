@@ -18,13 +18,28 @@ User = get_user_model()
 # ----------------------------------------------------
 
 class CuentaForm(forms.ModelForm):
+    # 🔑 CORRECCIÓN: Sobrescribir el campo 'saldo' para permitir números negativos
+    # y mejorar la usabilidad con 'step'.
+    saldo = forms.DecimalField(
+        label='Saldo Inicial/Actual',
+        # No incluimos min_value aquí para permitir saldos negativos (deudas)
+        max_digits=15, 
+        decimal_places=2,
+        widget=NumberInput(attrs={
+            'class': 'form-control', 
+            'placeholder': 'Ej: -2000.00 (para deudas)', 
+            'step': '0.01' # Permite ingresar decimales con dos lugares
+        })
+    )
+
     class Meta:
         model = Cuenta
+        # El widget para 'saldo' se define arriba, por lo que se elimina de 'widgets'.
         fields = ['nombre', 'tipo', 'saldo'] 
         widgets = {
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Principal'}),
             'tipo': Select(attrs={'class': 'form-select'}), 
-            'saldo': NumberInput(attrs={'class': 'form-control', 'placeholder': '0.00'}),
+            # Ya no es necesario 'saldo' aquí
         }
 
 # ----------------------------------------------------
@@ -170,6 +185,7 @@ class PresupuestoForm(forms.ModelForm):
         model = Presupuesto
         fields = ('categoria', 'monto_limite', 'mes', 'anio')
         widgets = {
+            # min: '0.01' es correcto aquí, ya que un presupuesto siempre es positivo
             'monto_limite': NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01', 'placeholder': 'Ej: 500.00'}),
         }
         
@@ -210,4 +226,3 @@ class CategoriaForm(forms.ModelForm):
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Alimentación'}),
             'tipo': Select(attrs={'class': 'form-select'}),
         }
-
