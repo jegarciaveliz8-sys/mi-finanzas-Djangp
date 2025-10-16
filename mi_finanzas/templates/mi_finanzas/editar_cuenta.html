@@ -7,7 +7,7 @@
     
     <form method="post" class="mb-4">
         {% csrf_token %}
-        {{ form.as_p }}
+        {{ cuenta_form.as_p }} 
         
         <button type="submit" class="btn btn-primary">Guardar Cambios</button>
         
@@ -29,3 +29,4 @@
     
 </div>
 {% endblock content %}
+
