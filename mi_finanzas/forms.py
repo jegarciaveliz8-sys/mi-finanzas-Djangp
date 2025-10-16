@@ -19,27 +19,25 @@ User = get_user_model()
 
 class CuentaForm(forms.ModelForm):
     # 🔑 CORRECCIÓN: Sobrescribir el campo 'saldo' para permitir números negativos
-    # y mejorar la usabilidad con 'step'.
     saldo = forms.DecimalField(
         label='Saldo Inicial/Actual',
-        # No incluimos min_value aquí para permitir saldos negativos (deudas)
+        # Permite saldos negativos para deudas/pasivos
         max_digits=15, 
         decimal_places=2,
         widget=NumberInput(attrs={
             'class': 'form-control', 
             'placeholder': 'Ej: -2000.00 (para deudas)', 
-            'step': '0.01' # Permite ingresar decimales con dos lugares
+            'step': '0.01'
         })
     )
 
     class Meta:
         model = Cuenta
-        # El widget para 'saldo' se define arriba, por lo que se elimina de 'widgets'.
+        # El widget para 'saldo' ya está definido arriba.
         fields = ['nombre', 'tipo', 'saldo'] 
         widgets = {
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Banco Principal'}),
             'tipo': Select(attrs={'class': 'form-select'}), 
-            # Ya no es necesario 'saldo' aquí
         }
 
 # ----------------------------------------------------
@@ -53,7 +51,7 @@ class TransaccionForm(forms.ModelForm):
     )
     
     def __init__(self, *args, **kwargs):
-        # Acepta 'user' o 'request' para filtrar querysets
+        # Acepta 'user' para filtrar querysets
         request = kwargs.pop('request', None) 
         user = kwargs.pop('user', None) 
         
@@ -88,12 +86,14 @@ class TransferenciaForm(forms.Form):
     cuenta_origen = forms.ModelChoiceField(
         queryset=Cuenta.objects.none(),
         label="Cuenta de Origen",
-        empty_label="Selecciona una cuenta..."
+        empty_label="Selecciona una cuenta...",
+        widget=Select(attrs={'class': 'form-select'})
     )
     cuenta_destino = forms.ModelChoiceField(
         queryset=Cuenta.objects.none(),
         label="Cuenta de Destino",
-        empty_label="Selecciona una cuenta..."
+        empty_label="Selecciona una cuenta...",
+        widget=Select(attrs={'class': 'form-select'})
     )
     monto = forms.DecimalField(
         label='Monto a transferir',
@@ -128,10 +128,9 @@ class TransferenciaForm(forms.Form):
         if not self.is_bound:
             self.fields['fecha'].initial = timezone.localdate()
 
-        # 🔑 BLOQUE DE CONFIGURACIÓN DE CRISPY FORMS (AÑADIDO Y CORREGIDO) 🔑
+        # Configuración de CRISPY FORMS para el layout
         self.helper = FormHelper()
         self.helper.form_method = 'post'
-        # Definimos el layout para usar columnas de Bootstrap (col-md-6)
         self.helper.layout = Layout(
             Row(
                 Column('cuenta_origen', css_class='form-group col-md-6 mb-3'),
@@ -143,7 +142,6 @@ class TransferenciaForm(forms.Form):
             ),
             'descripcion',
         )
-        # 🔑 FIN DEL BLOQUE CRISPY FORMS 🔑
 
     def clean(self):
         cleaned_data = super().clean()
@@ -161,6 +159,7 @@ class TransferenciaForm(forms.Form):
 # ----------------------------------------------------
 
 hoy = timezone.localdate()
+# Creamos las opciones de Meses y Años
 MESES_CHOICES = [(i, calendar.month_name[i].capitalize()) for i in range(1, 13)]
 ANIO_CHOICES = [(y, y) for y in range(hoy.year, hoy.year + 5)]
 
@@ -188,7 +187,7 @@ class PresupuestoForm(forms.ModelForm):
             # min: '0.01' es correcto aquí, ya que un presupuesto siempre es positivo
             'monto_limite': NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0.01', 'placeholder': 'Ej: 500.00'}),
         }
-        
+    
     def __init__(self, *args, **kwargs):
         request = kwargs.pop('request', None) 
         user = kwargs.pop('user', None) 
@@ -199,7 +198,14 @@ class PresupuestoForm(forms.ModelForm):
             user = request.user
         
         if user is not None:
-            self.fields['categoria'].queryset = Categoria.objects.filter(usuario=user)
+            # 🔑 CORRECCIÓN: Filtra categorías por el usuario Y por tipo='EGRESO'
+            # (Solo se presupuestan gastos).
+            self.fields['categoria'].queryset = Categoria.objects.filter(
+                usuario=user,
+                tipo='EGRESO' 
+            ).order_by('nombre')
+            
+            # Asegura que el select tiene la clase form-select
             self.fields['categoria'].widget.attrs.update({'class': 'form-select'})
 
 # ----------------------------------------------------
@@ -226,3 +232,4 @@ class CategoriaForm(forms.ModelForm):
             'nombre': TextInput(attrs={'class': 'form-control', 'placeholder': 'Ej: Alimentación'}),
             'tipo': Select(attrs={'class': 'form-select'}),
         }
+
