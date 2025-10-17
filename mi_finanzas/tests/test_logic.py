@@ -8,6 +8,7 @@ from datetime import date
 from mi_finanzas.models import Cuenta, Transaccion, Categoria, Presupuesto 
 from mi_finanzas.forms import TransaccionForm
 
+# Importaciones necesarias para cálculos en tests
 from django.db.models import Sum, Q, DecimalField 
 from django.db.models.functions import Coalesce 
 
@@ -27,7 +28,7 @@ class FinanzasLogicTestCase(TestCase):
             password='testpassword'
         )
 
-        # 2. Crear cuentas
+        # 2. Crear cuentas (saldos iniciales)
         self.cuenta_principal = Cuenta.objects.create(
             usuario=self.user, 
             nombre='Principal', 
@@ -60,6 +61,7 @@ class FinanzasLogicTestCase(TestCase):
         )
 
         # 4. Crear transacciones iniciales (Estas ya actualizan el saldo)
+        # Ingreso
         Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_principal,
@@ -69,10 +71,11 @@ class FinanzasLogicTestCase(TestCase):
             fecha=date.today(),
             descripcion='Pago de nómina'
         )
+        # Egreso (✅ CORREGIDO: Monto debe ser positivo)
         Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_principal,
-            monto=Decimal('-500.00'),
+            monto=Decimal('500.00'),
             tipo='EGRESO',
             categoria=self.cat_gasto,
             fecha=date.today(),
@@ -85,7 +88,12 @@ class FinanzasLogicTestCase(TestCase):
 
     def test_saldo_total_neto(self):
         """Asegura que el Saldo Total Neto se calcula correctamente (Activos - Pasivos)."""
-        # Saldo esperado después de setUp: 1000 + 2000 - 500 + 5000 - 200 = 7300.00
+        # Saldo esperado después de setUp: 
+        # (1000 + 5000 - 200) [Iniciales] + 2000 [Ingreso] - 500 [Egreso] = 7300.00
+        self.cuenta_principal.refresh_from_db() # 1000 + 2000 - 500 = 2500
+        self.cuenta_ahorros.refresh_from_db()  # 5000
+        self.tarjeta_credito.refresh_from_db() # -200
+        
         cuentas = Cuenta.objects.filter(usuario=self.user)
         saldo_neto = cuentas.aggregate(
             total=Coalesce(Sum('saldo'), Decimal(0), output_field=DecimalField())
@@ -95,10 +103,11 @@ class FinanzasLogicTestCase(TestCase):
     def test_transaccion_ajusta_saldo(self):
         """Asegura que una nueva transacción ajuste correctamente el saldo de la cuenta."""
         # Saldo inicial de Ahorros: 5000.00
+        # (✅ CORREGIDO: Monto debe ser positivo)
         Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_ahorros,
-            monto=Decimal('-100.00'),
+            monto=Decimal('100.00'),
             tipo='EGRESO',
             fecha=date.today(),
             descripcion='Retiro'
@@ -120,7 +129,7 @@ class FinanzasLogicTestCase(TestCase):
             usuario=self.user, 
             cuenta=self.cuenta_principal, 
             tipo='EGRESO', 
-            monto=-monto_transfer,
+            monto=monto_transfer, # ✅ CORREGIDO: Monto positivo (absoluto)
             fecha=date.today(),
             es_transferencia=True
         )
@@ -150,7 +159,7 @@ class FinanzasLogicTestCase(TestCase):
     def test_transferencia_excluida_de_flujo_caja(self):
         """Asegura que las transacciones marcadas como es_transferencia se excluyen del cálculo del dashboard."""
         
-        # Crear una transferencia que no debe contarse en Ingresos/Gastos
+        # Crear una transferencia (no debe contarse en Ingresos/Gastos del flujo de caja)
         Transaccion.objects.create(
             usuario=self.user, 
             cuenta=self.cuenta_ahorros, 
@@ -163,7 +172,7 @@ class FinanzasLogicTestCase(TestCase):
             usuario=self.user, 
             cuenta=self.cuenta_principal, 
             tipo='EGRESO', 
-            monto=Decimal('-500.00'),
+            monto=Decimal('500.00'), # ✅ CORREGIDO: Monto positivo (absoluto)
             fecha=date.today(),
             es_transferencia=True 
         )
@@ -181,7 +190,7 @@ class FinanzasLogicTestCase(TestCase):
             usuario=self.user, 
             cuenta=self.cuenta_principal, 
             tipo='EGRESO', 
-            monto=Decimal('-20.00'),
+            monto=Decimal('20.00'), # ✅ CORREGIDO: Monto positivo (absoluto)
             fecha=date.today(),
             es_transferencia=False
         )
@@ -193,16 +202,18 @@ class FinanzasLogicTestCase(TestCase):
             fecha__month=date.today().month
         )
         
+        # ✅ CORREGIDO: Filtrar por 'tipo', no por signo de 'monto'
         totales = transacciones_sin_transfer.aggregate(
-            ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0)),
-            gastos=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0))
+            ingresos=Coalesce(Sum('monto', filter=Q(tipo='INGRESO')), Decimal(0)),
+            gastos_abs=Coalesce(Sum('monto', filter=Q(tipo='EGRESO')), Decimal(0))
         )
         
         # Ingresos esperados: 2000 (nómina) + 100 (real) = 2100
         self.assertEqual(totales['ingresos'], Decimal('2100.00'))
         
-        # Gastos esperados: -500 (supermercado) + -20 (real) = -520.00
-        self.assertEqual(totales['gastos'], Decimal('-520.00'))
+        # Gastos esperados: 500 (supermercado) + 20 (real) = 520.00 (valor absoluto)
+        # Aserción en negativo para confirmar el flujo de caja.
+        self.assertEqual(-totales['gastos_abs'], Decimal('-520.00')) 
         
 # --------------------------------------------------------
 # C. PRUEBAS DE INTEGRACIÓN DE VISTAS
@@ -268,7 +279,7 @@ class VistasIntegracionTestCase(TestCase):
         self.assertEqual(self.cuenta2.saldo, Decimal('800.00'))
         
         # 3. Verificar que se crearon 2 transacciones y están marcadas
-        transacciones_transfer = Transaccion.objects.filter(es_transferencia=True).count()
+        transacciones_transfer = Transaccion.objects.filter(es_transferencia=True, usuario=self.user).count()
         self.assertEqual(transacciones_transfer, 2)
 
     def test_transferencia_saldo_insuficiente(self):
@@ -301,7 +312,7 @@ class VistasIntegracionTestCase(TestCase):
         data_create = {
             'cuenta': self.cuenta2.pk,
             'tipo': 'EGRESO',
-            # 💡 CORREGIDO: Usar monto positivo, la vista debe aplicar el signo negativo.
+            # ✅ CORRECTO: Usar monto positivo. La vista y el modelo lo manejan.
             'monto': Decimal('150.00'), 
             'categoria': self.cat_gasto.pk,
             'fecha': date.today(),
@@ -317,19 +328,21 @@ class VistasIntegracionTestCase(TestCase):
         # --- 2. EDICIÓN ---
         url_editar = reverse('mi_finanzas:editar_transaccion', args=[tx_luz.pk])
         data_edit = data_create.copy()
-        # 💡 CORREGIDO: Usar monto positivo en la edición.
+        # ✅ CORRECTO: Usar monto positivo en la edición.
         data_edit['monto'] = Decimal('100.00') # Nuevo monto
         
         self.client.post(url_editar, data_edit, follow=True)
         self.cuenta2.refresh_from_db()
-        # Saldo esperado: 850 (antes) - (-150) (revertir viejo) + (-100) (aplicar nuevo) = 900.00
+        # Lógica: 850 (antes) - (-150) (revertir -EGRESO) + (-100) (aplicar -EGRESO) = 900.00
         self.assertEqual(self.cuenta2.saldo, Decimal('900.00'))
         
         # --- 3. ELIMINACIÓN ---
+        # NOTA: La vista de eliminación DEBE manejar la reversión del saldo.
+        # Si la vista funciona: Saldo 900 - (-100) = 1000.00
         url_eliminar = reverse('mi_finanzas:eliminar_transaccion', args=[tx_luz.pk])
         self.client.post(url_eliminar, follow=True)
         self.cuenta2.refresh_from_db()
-        # Lógica de eliminación: 900 - (-100) = 1000.00 (Vuelve al saldo original de la cuenta)
+        # Saldo esperado: Vuelve al saldo original de la cuenta de prueba (1000.00)
         self.assertEqual(self.cuenta2.saldo, Decimal('1000.00'))
         
         # 4. Verificar que la transacción fue eliminada
@@ -352,11 +365,13 @@ class VistasIntegracionTestCase(TestCase):
         )
         
         # 2. Crear el Presupuesto para esa categoría
+        # NOTA: Asegúrate de que tu modelo Presupuesto tiene el campo 'periodo' o ajusta la creación.
         presupuesto_viajes = Presupuesto.objects.create(
             usuario=self.user,
             categoria=cat_viajes,
             monto_limite=Decimal('1000.00'),
-            periodo='MENSUAL'
+            mes=date.today().month, 
+            anio=date.today().year
         )
         
         # 3. Crear Transacciones de EGRESO que DEBEN contarse (Gasto Real)
@@ -364,7 +379,7 @@ class VistasIntegracionTestCase(TestCase):
         Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_principal,
-            monto=Decimal('-300.00'),
+            monto=Decimal('300.00'), # ✅ CORREGIDO: Monto positivo (absoluto)
             tipo='EGRESO',
             categoria=cat_viajes,
             fecha=date.today(),
@@ -374,7 +389,7 @@ class VistasIntegracionTestCase(TestCase):
         Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_principal,
-            monto=Decimal('-150.00'),
+            monto=Decimal('150.00'), # ✅ CORREGIDO: Monto positivo (absoluto)
             tipo='EGRESO',
             categoria=cat_viajes,
             fecha=date.today(),
@@ -387,7 +402,7 @@ class VistasIntegracionTestCase(TestCase):
         Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_principal,
-            monto=Decimal('-200.00'),
+            monto=Decimal('200.00'), # ✅ CORREGIDO: Monto positivo (absoluto)
             tipo='EGRESO',
             categoria=cat_viajes,
             fecha=date.today(),
@@ -406,32 +421,34 @@ class VistasIntegracionTestCase(TestCase):
             descripcion='Reembolso de viaje'
         )
         
-        # 5. Lógica de cálculo (similar a la que usarías en un método del modelo/manager)
+        # 5. Lógica de cálculo 
         
         # Filtrar solo Egresos, no transferencias, de la categoría y período del presupuesto
         gasto_acumulado = Transaccion.objects.filter(
             usuario=self.user,
             categoria=presupuesto_viajes.categoria,
-            tipo='EGRESO', # Solo egresos
-            es_transferencia=False, # Excluir transferencias
+            tipo='EGRESO', 
+            es_transferencia=False, 
             fecha__year=date.today().year,
-            fecha__month=date.today().month # Asumiendo un periodo MENSUAL simple
+            fecha__month=date.today().month
         ).aggregate(
+            # Sumará los montos positivos: 300.00 + 150.00 = 450.00
             total_gastado=Coalesce(Sum('monto'), Decimal(0))
         )['total_gastado']
         
-        # El gasto debe ser: -300.00 + -150.00 = -450.00
-        self.assertEqual(gasto_acumulado, Decimal('-450.00'))
+        # El gasto debe ser: 300.00 + 150.00 = 450.00 (valor absoluto)
+        self.assertEqual(gasto_acumulado, Decimal('450.00')) # ✅ CORREGIDO: Aserción en valor absoluto
         
         # Opcionalmente, verificar el porcentaje de ejecución
-        porcentaje_ejecucion = (abs(gasto_acumulado) / presupuesto_viajes.monto_limite) * 100
+        # NOTA: Usamos el gasto_acumulado (positivo) para el cálculo.
+        porcentaje_ejecucion = (gasto_acumulado / presupuesto_viajes.monto_limite) * 100
         self.assertEqual(porcentaje_ejecucion, Decimal('45.00'))
         
-        # Comprobar que el saldo total neto de las cuentas NO cambia por esta prueba (buena práctica)
+        # Comprobar el saldo total neto final
         cuentas = Cuenta.objects.filter(usuario=self.user)
         saldo_neto_final = cuentas.aggregate(
             total=Coalesce(Sum('saldo'), Decimal(0), output_field=DecimalField())
         )['total']
-        # Saldo inicial: 7300.00. La nueva transferencia y los ingresos/gastos reales modifican el saldo.
-        # 7300 (inicial) - 300 - 150 - 200 + 50 = 6700.00
+        # Saldo anterior (7300) - 300 - 150 - 200 + 50 = 6700.00
         self.assertEqual(saldo_neto_final, Decimal('6700.00'))
+
