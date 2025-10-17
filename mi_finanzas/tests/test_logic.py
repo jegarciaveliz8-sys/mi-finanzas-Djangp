@@ -5,11 +5,9 @@ from decimal import Decimal
 from datetime import date
 
 # --- CORRECCIÓN CRÍTICA DE IMPORTACIÓN Y AGREGACIÓN ---
-# 1. Importación explícita de modelos para evitar errores de ruta relativa.
 from mi_finanzas.models import Cuenta, Transaccion, Categoria, Presupuesto 
 from mi_finanzas.forms import TransaccionForm
 
-# 2. Importaciones necesarias para las funciones de agregación (Sum, Q) y campos (DecimalField).
 from django.db.models import Sum, Q, DecimalField 
 from django.db.models.functions import Coalesce 
 
@@ -29,7 +27,7 @@ class FinanzasLogicTestCase(TestCase):
             password='testpassword'
         )
 
-        # 2. Crear cuentas (TODOS LOS SALDOS USAN 'saldo=')
+        # 2. Crear cuentas
         self.cuenta_principal = Cuenta.objects.create(
             usuario=self.user, 
             nombre='Principal', 
@@ -62,6 +60,7 @@ class FinanzasLogicTestCase(TestCase):
         )
 
         # 4. Crear transacciones iniciales (Fecha de hoy para el mes actual)
+        # ESTAS TRANSACCIONES YA EJECUTAN LA LÓGICA DE save() EN MODELS.PY
         Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_principal,
@@ -87,12 +86,14 @@ class FinanzasLogicTestCase(TestCase):
 
     def test_saldo_total_neto(self):
         """Asegura que el Saldo Total Neto se calcula correctamente (Activos - Pasivos)."""
-        # Saldo esperado: 1000 (Principal) + 5000 (Ahorros) + (-200) (Tarjeta) = 5800.00
+        
+        # 💡 CORRECCIÓN: El saldo esperado debe ser 7300.00
+        # 1000 (Principal Inicial) + 2000 (Nómina) - 500 (Super) + 5000 (Ahorros) - 200 (Tarjeta) = 7300.00
         cuentas = Cuenta.objects.filter(usuario=self.user)
         saldo_neto = cuentas.aggregate(
             total=Coalesce(Sum('saldo'), Decimal(0), output_field=DecimalField())
         )['total']
-        self.assertEqual(saldo_neto, Decimal('5800.00'))
+        self.assertEqual(saldo_neto, Decimal('7300.00')) # <-- CORREGIDO
 
     def test_transaccion_ajusta_saldo(self):
         """Asegura que una nueva transacción ajuste correctamente el saldo de la cuenta."""
@@ -118,6 +119,7 @@ class FinanzasLogicTestCase(TestCase):
         monto_transfer = Decimal('100.00')
         
         # 1. Simular la transferencia de la función transferir_monto
+        # Estas dos llamadas a create() ya ejecutaron la lógica de save() y actualizaron los saldos.
         tx_origen = Transaccion.objects.create(
             usuario=self.user, 
             cuenta=self.cuenta_principal, 
@@ -134,10 +136,15 @@ class FinanzasLogicTestCase(TestCase):
             fecha=date.today(),
             es_transferencia=True
         )
-        tx_origen.transaccion_relacionada = tx_destino
-        tx_destino.transaccion_relacionada = tx_origen
-        tx_origen.save()
-        tx_destino.save()
+        
+        # 💡 CORRECCIÓN: Usar update() para enlazar las transacciones SIN llamar
+        # nuevamente al método save() del modelo, evitando recursión y errores.
+        Transaccion.objects.filter(pk=tx_origen.pk).update(transaccion_relacionada=tx_destino)
+        Transaccion.objects.filter(pk=tx_destino.pk).update(transaccion_relacionada=tx_origen)
+
+        # Refrescar los objetos locales antes de las verificaciones
+        tx_origen.refresh_from_db()
+        tx_destino.refresh_from_db()
 
         # 2. Verificaciones
         self.assertTrue(tx_origen.es_transferencia)
@@ -217,7 +224,7 @@ class VistasIntegracionTestCase(TestCase):
         )
         self.client.login(username='viewuser', password='viewpassword')
         
-        # Cuentas necesarias (TODOS LOS SALDOS USAN 'saldo=')
+        # Cuentas necesarias 
         self.cuenta1 = Cuenta.objects.create(
             usuario=self.user, nombre='Caja', tipo='EFECTIVO', saldo=Decimal('500.00')
         )
@@ -231,6 +238,7 @@ class VistasIntegracionTestCase(TestCase):
         self.url_resumen = reverse('mi_finanzas:resumen_financiero')
         self.url_transferencia = reverse('mi_finanzas:transferir_monto')
         self.url_anadir_transaccion = reverse('mi_finanzas:anadir_transaccion')
+        # El arg=[1] puede ser problemático si no hay transacciones, pero lo dejamos por ahora.
         self.url_eliminar_transaccion = reverse('mi_finanzas:eliminar_transaccion', args=[1])
 
 
