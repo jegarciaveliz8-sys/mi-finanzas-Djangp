@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator 
 from django.utils import timezone
-from datetime import timedelta # Necesario para TransaccionRecurrente
+from datetime import timedelta 
 
 User = get_user_model() 
 
@@ -11,27 +11,23 @@ User = get_user_model()
 # ========================================================
 
 TIPOS_CUENTA = [
-    # Tipos originales
     ('AHORROS', 'Ahorros'),
     ('CHEQUES', 'Cheques/Corriente'),
     ('INVERSION', 'Inversión'),
     ('TARJETA', 'Tarjeta de Crédito'),
     ('EFECTIVO', 'Efectivo'),
-    
-    # 🌟 NUEVOS TIPOS AÑADIDOS (10 adicionales) 🌟
-    ('PRESTAMO', 'Préstamo Personal/Deuda'), # Hipoteca o Préstamo Auto se manejan mejor como cuentas separadas
-    ('HIPOTECA', 'Hipoteca'), # Un pasivo a largo plazo
-    ('AUTO', 'Préstamo de Auto'), # Deuda de Auto
-    ('RETIRO', 'Cuenta de Retiro/Pensión'), # Inversión a largo plazo (401k, Afore, etc.)
+    ('PRESTAMO', 'Préstamo Personal/Deuda'), 
+    ('HIPOTECA', 'Hipoteca'), 
+    ('AUTO', 'Préstamo de Auto'), 
+    ('RETIRO', 'Cuenta de Retiro/Pensión'), 
     ('CRYPTO', 'Criptomonedas'),
-    ('CDT', 'Certificado de Depósito (CDT)'), # Ahorro a plazo fijo
-    ('WALLET', 'Billetera Digital/PayPal'), # Dinero en plataformas (Venmo, PayPal)
-    ('METAS', 'Ahorro para Metas Específicas'), # Dinero apartado para un objetivo (viaje, gadget)
-    ('ACTIVO_FIJO', 'Activo Fijo (Valor Neto)'), # Bienes como propiedad o vehículo (solo para seguimiento del valor neto)
-    ('COBRO', 'Cuentas por Cobrar'), # Dinero que te deben
+    ('CDT', 'Certificado de Depósito (CDT)'), 
+    ('WALLET', 'Billetera Digital/PayPal'), 
+    ('METAS', 'Ahorro para Metas Específicas'), 
+    ('ACTIVO_FIJO', 'Activo Fijo (Valor Neto)'), 
+    ('COBRO', 'Cuentas por Cobrar'), 
 ]
 
-# Usado para Transacción, Categoría y TransacciónRecurrente
 TIPO_INGRESO_EGRESO = [
     ('INGRESO', 'Ingreso'),
     ('EGRESO', 'Egreso'),
@@ -51,9 +47,7 @@ FRECUENCIA_CHOICES = [
 class Cuenta(models.Model):
     usuario = models.ForeignKey(User, on_delete=models.CASCADE)
     nombre = models.CharField(max_length=100)
-    # 🔑 Campo tipo actualizado con los nuevos choices
     tipo = models.CharField(max_length=15, choices=TIPOS_CUENTA) 
-    # He incrementado max_length a 15 para acomodar los nuevos tipos más largos.
     saldo = models.DecimalField(max_digits=15, decimal_places=2, default=0.00) 
 
     class Meta:
@@ -70,8 +64,6 @@ class Cuenta(models.Model):
 class Categoria(models.Model):
     usuario = models.ForeignKey(User, on_delete=models.CASCADE, related_name='categorias')
     nombre = models.CharField(max_length=100)
-    
-    # 🔑 CORRECCIÓN CRÍTICA: CAMPO 'TIPO' AÑADIDO (Requerido por CategoriaForm)
     tipo = models.CharField(
         max_length=7, 
         choices=TIPO_INGRESO_EGRESO, 
@@ -79,7 +71,6 @@ class Categoria(models.Model):
     )
     
     class Meta:
-        # Añadido 'tipo' para permitir que el usuario tenga 'Viajes-Ingreso' y 'Viajes-Egreso'
         unique_together = ('usuario', 'nombre', 'tipo') 
         verbose_name_plural = "Categorías"
 
@@ -87,7 +78,7 @@ class Categoria(models.Model):
         return f"[{self.get_tipo_display()}] {self.nombre}"
 
 # ========================================================
-# --- 3. MODELO TRANSACCION ---
+# --- 3. MODELO TRANSACCION (Refinado) ---
 # ========================================================
 
 class Transaccion(models.Model):
@@ -102,6 +93,19 @@ class Transaccion(models.Model):
     descripcion = models.TextField(blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     
+    # 🌟 REFINAMIENTO AÑADIDO para robustez y filtrado 🌟
+    # Campo para identificar transacciones que son transferencias entre cuentas
+    es_transferencia = models.BooleanField(default=False) 
+    
+    # Campo para enlazar la transacción de egreso con su ingreso par, y viceversa
+    transaccion_relacionada = models.ForeignKey(
+        'self', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='par_transferencia'
+    )
+    
     class Meta:
         verbose_name_plural = "Transacciones"
         ordering = ['-fecha', '-fecha_creacion']
@@ -114,7 +118,7 @@ class Transaccion(models.Model):
 # ========================================================
 
 class TransaccionRecurrente(models.Model):
-    usuario = models.ForeignKey(User, on_delete=models.CASCADE) # 🔑 Añadido
+    usuario = models.ForeignKey(User, on_delete=models.CASCADE) 
     cuenta = models.ForeignKey(Cuenta, on_delete=models.CASCADE)
     categoria = models.ForeignKey(Categoria, on_delete=models.SET_NULL, null=True, blank=True)
     
@@ -131,9 +135,8 @@ class TransaccionRecurrente(models.Model):
     def __str__(self):
         return f"Recurrente: {self.descripcion} - {self.frecuencia}"
         
-    # Método esencial para que tu comando cron funcione
     def calcular_siguiente_fecha(self):
-        # Implementación simple, usarías dateutil.relativedelta para precisión
+        # Implementación simple, usar dateutil.relativedelta para precisión
         if self.frecuencia == 'MENSUAL':
             return self.proximo_pago + timedelta(days=30)
         elif self.frecuencia == 'SEMANAL':
@@ -149,7 +152,6 @@ class Presupuesto(models.Model):
     """Define el límite de gasto para una categoría en un periodo específico."""
     
     usuario = models.ForeignKey(User, on_delete=models.CASCADE)
-    # Solo puedes presupuestar categorías de egreso/gasto, por eso se vincula a Categoria
     categoria = models.ForeignKey(Categoria, on_delete=models.CASCADE) 
     
     monto_limite = models.DecimalField(
