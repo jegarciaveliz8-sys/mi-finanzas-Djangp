@@ -25,7 +25,7 @@ urlpatterns = [
     # Vista de Historial de Transacciones (CLASE)
     path('transacciones/lista/', views.TransaccionesListView.as_view(), name='transacciones_lista'), 
     
-    # RUTA DEL MANUAL (Si existe)
+    # RUTA DEL MANUAL 
     path('manual/', TemplateView.as_view(template_name='manual_html/index.html'), name='manual_page'),
     
     # =========================================================
@@ -43,7 +43,7 @@ urlpatterns = [
     path('transacciones/<int:pk>/eliminar/', views.eliminar_transaccion, name='eliminar_transaccion'),
     
     # RUTA DE TRANSFERENCIA
-    # 💡 CORREGIDO: Cambiado 'name='transferencia'' a 'name='transferir_monto''
+    # ✅ ESTE NOMBRE ES EL CORRECTO
     path('transferir/', views.transferir_monto, name='transferir_monto'), 
 
     # =========================================================
