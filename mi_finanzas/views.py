@@ -54,19 +54,30 @@ def resumen_financiero(request):
         fecha__lt=primer_dia_siguiente_mes
     )
     
-    # Agregación de Ingresos y Gastos
-    totales_mes = transacciones_mes.aggregate(
+    # ========================================================
+    # 💡 CORRECCIÓN CRÍTICA: Excluir transferencias de los cálculos de Ingresos/Gastos.
+    # ========================================================
+    filtro_excluir_transferencias = Q(descripcion__icontains='Transferencia Enviada') | Q(descripcion__icontains='Transferencia Recibida')
+
+    transacciones_mes_sin_transfer = transacciones_mes.exclude(filtro_excluir_transferencias)
+
+    # Agregación de Ingresos y Gastos (usando el QuerySet filtrado)
+    totales_mes = transacciones_mes_sin_transfer.aggregate(
         # Ingresos: Montos > 0
         ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0), output_field=DecimalField()),
         # Gastos: Montos < 0 (la suma será negativa)
         gastos=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField())
     )
+    # ========================================================
+    # FIN DE CORRECCIÓN
+    # ========================================================
     
     # --- 1. LÓGICA PARA ÚLTIMAS TRANSACCIONES ---
     ultimas_transacciones = Transaccion.objects.filter(usuario=request.user).order_by('-fecha')[:5]
 
     # --- 2. LÓGICA PARA GRÁFICO (Gastos por Categoría) ---
-    gastos_por_categoria = transacciones_mes.filter(monto__lt=0, categoria__isnull=False).values(
+    # Usamos transacciones_mes_sin_transfer para excluir transferencias de este gráfico también.
+    gastos_por_categoria = transacciones_mes_sin_transfer.filter(monto__lt=0, categoria__isnull=False).values(
         'categoria__nombre'
     ).annotate(
         # Multiplicar por -1 para obtener el valor positivo del gasto
@@ -97,6 +108,8 @@ def resumen_financiero(request):
             fecha__gte=primer_dia_mes, 
             fecha__lt=primer_dia_siguiente_mes,
             monto__lt=0
+        ).exclude(
+            filtro_excluir_transferencias # Aseguramos que los presupuestos no cuenten transferencias
         ).aggregate(
             total_gastado=Coalesce(Sum('monto'), Decimal(0), output_field=DecimalField())
         )['total_gastado']
@@ -525,9 +538,13 @@ def reportes_financieros(request):
         fecha__gte=fecha_inicio
     )
     
+    # 💡 CORRECCIÓN PARA REPORTES: Excluir transferencias de los cálculos
+    filtro_excluir_transferencias = Q(descripcion__icontains='Transferencia Enviada') | Q(descripcion__icontains='Transferencia Recibida')
+    transacciones_sin_transfer = transacciones.exclude(filtro_excluir_transferencias)
+    
     # --- 2. CÁLCULO DEL RESUMEN TOTAL (Variable esperada: 'resumen_mensual') ---
     # Total de Ingresos/Egresos en el rango de 6 meses
-    totales_agregados = transacciones.aggregate(
+    totales_agregados = transacciones_sin_transfer.aggregate(
         ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0), output_field=DecimalField()),
         egresos=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField())
     )
@@ -541,7 +558,7 @@ def reportes_financieros(request):
     }
     
     # --- 3. CÁLCULO DE GASTOS POR CATEGORÍA (Variable esperada: 'gastos_por_categoria') ---
-    gastos_por_categoria_qs = transacciones.filter(
+    gastos_por_categoria_qs = transacciones_sin_transfer.filter(
         monto__lt=0, 
         categoria__isnull=False
     ).values(
@@ -567,4 +584,3 @@ def reportes_financieros(request):
     }
     
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
-
