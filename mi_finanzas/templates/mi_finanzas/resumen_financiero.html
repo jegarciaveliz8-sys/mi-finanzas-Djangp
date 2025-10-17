@@ -184,7 +184,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 
-                <form action="{% url 'mi_finanzas:transferencia' %}" method="post">
+                <form action="{% url 'mi_finanzas:transferir_monto' %}" method="post">
                     {% csrf_token %}
                     <div class="modal-body">
                         {% if form_transferencia %}
