@@ -13,7 +13,8 @@ from dateutil.relativedelta import relativedelta
 from decimal import Decimal 
 import json 
 import calendar 
-from django.core.serializers.json import DjangoJSONEncoder # Necesario para serializar QuerySets
+from django.core.serializers.json import DjangoJSONEncoder 
+
 # ========================================================
 # 🔑 IMPORTACIONES CONSOLIDADAS DE MODELOS Y FORMULARIOS
 # ========================================================
@@ -54,12 +55,8 @@ def resumen_financiero(request):
         fecha__lt=primer_dia_siguiente_mes
     )
     
-    # ========================================================
-    # 💡 CORRECCIÓN CRÍTICA: Excluir transferencias de los cálculos de Ingresos/Gastos.
-    # ========================================================
-    filtro_excluir_transferencias = Q(descripcion__icontains='Transferencia Enviada') | Q(descripcion__icontains='Transferencia Recibida')
-
-    transacciones_mes_sin_transfer = transacciones_mes.exclude(filtro_excluir_transferencias)
+    # 🚀 REFINAMIENTO CRÍTICO: Usar el nuevo campo 'es_transferencia'
+    transacciones_mes_sin_transfer = transacciones_mes.filter(es_transferencia=False)
 
     # Agregación de Ingresos y Gastos (usando el QuerySet filtrado)
     totales_mes = transacciones_mes_sin_transfer.aggregate(
@@ -68,15 +65,13 @@ def resumen_financiero(request):
         # Gastos: Montos < 0 (la suma será negativa)
         gastos=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField())
     )
-    # ========================================================
-    # FIN DE CORRECCIÓN
-    # ========================================================
+    # ----------------------------------------------------
     
     # --- 1. LÓGICA PARA ÚLTIMAS TRANSACCIONES ---
     ultimas_transacciones = Transaccion.objects.filter(usuario=request.user).order_by('-fecha')[:5]
 
     # --- 2. LÓGICA PARA GRÁFICO (Gastos por Categoría) ---
-    # Usamos transacciones_mes_sin_transfer para excluir transferencias de este gráfico también.
+    # Usamos transacciones_mes_sin_transfer
     gastos_por_categoria = transacciones_mes_sin_transfer.filter(monto__lt=0, categoria__isnull=False).values(
         'categoria__nombre'
     ).annotate(
@@ -102,22 +97,23 @@ def resumen_financiero(request):
     
     resultados_presupuesto = []
     for presupuesto in presupuestos_activos_list:
+        # 🚀 REFINAMIENTO CRÍTICO: Usar el nuevo campo 'es_transferencia' en el filtro de gasto
         gasto_actual_q = Transaccion.objects.filter(
             usuario=request.user,
             categoria=presupuesto.categoria,
             fecha__gte=primer_dia_mes, 
             fecha__lt=primer_dia_siguiente_mes,
-            monto__lt=0
-        ).exclude(
-            filtro_excluir_transferencias # Aseguramos que los presupuestos no cuenten transferencias
+            monto__lt=0,
+            es_transferencia=False # <-- ¡FILTRO ACTUALIZADO!
         ).aggregate(
             total_gastado=Coalesce(Sum('monto'), Decimal(0), output_field=DecimalField())
         )['total_gastado']
-       
+        # ----------------------------------------------------
+        
         gasto_actual = abs(gasto_actual_q)
         restante = presupuesto.monto_limite - gasto_actual
         porcentaje = (gasto_actual / presupuesto.monto_limite) * 100 if presupuesto.monto_limite > 0 else 0
-       
+        
         # Lógica simple de color de barra
         color_barra = 'bg-success'
         if porcentaje > 75:
@@ -139,21 +135,21 @@ def resumen_financiero(request):
     context = {
         'cuentas': cuentas,
         'saldo_total': saldo_total,
-       
+        
         # Datos del mes
         'ingresos_mes': totales_mes['ingresos'],
         # Usamos abs() para mostrar los gastos como un valor positivo, como es común en UI
         'gastos_mes': abs(totales_mes['gastos']), 
         'mes_actual_str': hoy.strftime("%B %Y"),
-       
+        
         # Nuevos datos para el panel
         'ultimas_transacciones': ultimas_transacciones,
         'chart_data_json': chart_data_json, 
         'resultados_presupuesto': resultados_presupuesto, 
-       
+        
         # 💡 CORRECCIÓN APLICADA: Usar 'form_transferencia' para el modal del dashboard
         'form_transferencia': TransferenciaForm(user=request.user),
-       
+        
         'estado_financiero': {'tipo': 'alert-info', 'mensaje': 'Bienvenido a tu resumen financiero.', 'icono': 'fas fa-info-circle'}
     }
     return render(request, 'mi_finanzas/resumen_financiero.html', context)
@@ -171,7 +167,6 @@ class CuentasListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # 💡 NOTA: Uso 'form' aquí, asumiendo que el modal en cuentas_lista.html lo busca como 'form'.
         context['form'] = TransferenciaForm(user=self.request.user) 
         return context
 
@@ -186,7 +181,7 @@ class TransaccionesListView(ListView):
         return Transaccion.objects.filter(usuario=self.request.user).order_by('-fecha')
 
 # ========================================================
-# VISTA DE TRANSFERENCIA (Lógica de Negocio)
+# VISTA DE TRANSFERENCIA (Lógica de Negocio - Refinado)
 # ========================================================
 
 @login_required
@@ -194,59 +189,72 @@ class TransaccionesListView(ListView):
 def transferir_monto(request):
     """Maneja la lógica para transferir fondos entre cuentas."""
     if request.method == 'POST':
-        # Instancia el formulario de transferencia con la data POST y el user
         form = TransferenciaForm(request.POST, user=request.user)
         
         if form.is_valid():
             cuenta_origen = form.cleaned_data['cuenta_origen']
             cuenta_destino = form.cleaned_data['cuenta_destino']
             monto = form.cleaned_data['monto']
+            fecha = form.cleaned_data['fecha']
+            descripcion = form.cleaned_data['descripcion'] or 'Transferencia interna'
 
             # Verificación de Saldo: Previene transferencias si el saldo no es suficiente.
             if cuenta_origen.saldo < monto and cuenta_origen.saldo >= 0:
                 messages.error(request, 'Saldo insuficiente en la cuenta de origen.')
                 return redirect('mi_finanzas:resumen_financiero')
 
-            # Actualizar saldos y registrar transacciones
+            # Actualizar saldos
             cuenta_origen.saldo -= monto
             cuenta_destino.saldo += monto
-           
+            
             cuenta_origen.save()
             cuenta_destino.save()
 
-            # Transacción de Egreso (Origen)
-            Transaccion.objects.create(
+            # 🚀 REFINAMIENTO CRÍTICO: Registrar y enlazar transacciones como transferencias
+            
+            # 1. Transacción de Egreso (Origen)
+            tx_origen = Transaccion.objects.create(
                 usuario=request.user, 
                 cuenta=cuenta_origen, 
                 tipo='EGRESO', 
                 monto=-monto,
-                descripcion=f"Transferencia Enviada a {cuenta_destino.nombre} ({form.cleaned_data['descripcion'] or 'Sin descripción'})",
-                fecha=form.cleaned_data['fecha']
+                descripcion=f"Transferencia Enviada a {cuenta_destino.nombre} ({descripcion})",
+                fecha=fecha,
+                es_transferencia=True # <-- ¡CRÍTICO!
             )
-            # Transacción de Ingreso (Destino)
-            Transaccion.objects.create(
+            # 2. Transacción de Ingreso (Destino)
+            tx_destino = Transaccion.objects.create(
                 usuario=request.user, 
                 cuenta=cuenta_destino, 
                 tipo='INGRESO', 
                 monto=monto,
-                descripcion=f"Transferencia Recibida de {cuenta_origen.nombre} ({form.cleaned_data['descripcion'] or 'Sin descripción'})",
-                fecha=form.cleaned_data['fecha']
+                descripcion=f"Transferencia Recibida de {cuenta_origen.nombre} ({descripcion})",
+                fecha=fecha,
+                es_transferencia=True # <-- ¡CRÍTICO!
             )
+            
+            # 3. Enlazar las transacciones para una posible reversión/edición más fácil
+            tx_origen.transaccion_relacionada = tx_destino
+            tx_destino.transaccion_relacionada = tx_origen
+            tx_origen.save()
+            tx_destino.save()
+            
+            # ----------------------------------------------------------------------
 
             messages.success(request, '¡Transferencia realizada con éxito!')
             return redirect('mi_finanzas:resumen_financiero')
-        
+            
         else:
             # Mostrar errores de validación del formulario (ej. origen = destino)
             for field, errors in form.errors.items():
                 for error in errors:
                     messages.error(request, f"Error en {field}: {error}")
-         
+            
     # Redirigir siempre si no se pudo completar el POST (para evitar re-envíos)
     return redirect('mi_finanzas:resumen_financiero')
 
 # ========================================================
-# VISTAS DE CUENTAS (CRUD)
+# VISTAS DE CUENTAS (CRUD) (No requieren cambios de refinamiento)
 # ========================================================
 
 @login_required
@@ -320,7 +328,7 @@ def eliminar_cuenta(request, pk):
     return render(request, 'mi_finanzas/eliminar_cuenta_confirm.html', {'cuenta': cuenta}) 
 
 # ========================================================
-# VISTAS DE TRANSACCIONES (CRUD)
+# VISTAS DE TRANSACCIONES (CRUD) (No requieren cambios de refinamiento)
 # ========================================================
 
 @login_required
@@ -333,12 +341,12 @@ def anadir_transaccion(request):
         if form.is_valid():
             transaccion = form.save(commit=False)
             transaccion.usuario = request.user
-           
+            
             # Ajustar saldo de la cuenta antes de guardar
             cuenta = transaccion.cuenta
             cuenta.saldo += transaccion.monto # Si es egreso, monto es negativo, por lo que resta
             cuenta.save()
-           
+            
             transaccion.save()
             messages.success(request, "¡Transacción añadida con éxito!")
             return redirect('mi_finanzas:transacciones_lista')
@@ -366,6 +374,10 @@ def editar_transaccion(request, pk):
     transaccion_antigua = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
     monto_original = transaccion_antigua.monto
     
+    if transaccion_antigua.es_transferencia:
+        messages.error(request, "Las transacciones de transferencia no pueden editarse directamente. Elimina y vuelve a crear la transferencia completa.")
+        return redirect('mi_finanzas:transacciones_lista')
+
     if request.method == 'POST':
         # Usamos el argumento user para filtrar cuentas en el formulario
         form = TransaccionForm(request.POST, instance=transaccion_antigua, user=request.user) 
@@ -373,20 +385,20 @@ def editar_transaccion(request, pk):
         if form.is_valid():
             transaccion_nueva = form.save(commit=False)
             monto_nuevo = transaccion_nueva.monto
-           
+            
             # Lógica de ajuste de saldos (CRÍTICA)
             cuenta = transaccion_antigua.cuenta
-           
+            
             # 1. Deshacer el impacto del monto original
             cuenta.saldo -= monto_original
-           
+            
             # 2. Aplicar el impacto del monto nuevo
             cuenta.saldo += monto_nuevo
-           
+            
             # 3. Guardar los cambios
             cuenta.save()
             transaccion_nueva.save() 
-           
+            
             messages.success(request, "¡Transacción actualizada con éxito!")
             return redirect('mi_finanzas:transacciones_lista') 
         else:
@@ -411,6 +423,27 @@ def eliminar_transaccion(request, pk):
     """Vista para eliminar una transacción y revertir su efecto en el saldo de la cuenta."""
     transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
     
+    # 🚀 REFINAMIENTO CRÍTICO: Eliminar la transferencia completa
+    if transaccion.es_transferencia and transaccion.transaccion_relacionada:
+        # Se elimina la transacción par automáticamente
+        transaccion_par = transaccion.transaccion_relacionada
+        
+        # Ajuste de saldo en la cuenta de la transacción actual
+        cuenta = transaccion.cuenta
+        cuenta.saldo -= transaccion.monto
+        cuenta.save()
+        transaccion.delete()
+        
+        # Ajuste de saldo en la cuenta de la transacción par
+        cuenta_par = transaccion_par.cuenta
+        cuenta_par.saldo -= transaccion_par.monto
+        cuenta_par.save()
+        transaccion_par.delete()
+        
+        messages.success(request, "¡Transferencia eliminada y saldos ajustados con éxito!")
+        return redirect('mi_finanzas:transacciones_lista')
+    # -----------------------------------------------------------
+    
     if request.method == 'POST':
         cuenta = transaccion.cuenta
         monto = transaccion.monto 
@@ -431,7 +464,7 @@ def eliminar_transaccion(request, pk):
 
 
 # ========================================================
-# VISTAS DE PRESUPUESTOS (CRUD)
+# VISTAS DE PRESUPUESTOS (CRUD) (No requieren cambios de refinamiento)
 # ========================================================
 
 @method_decorator(login_required, name='dispatch')
@@ -538,9 +571,8 @@ def reportes_financieros(request):
         fecha__gte=fecha_inicio
     )
     
-    # 💡 CORRECCIÓN PARA REPORTES: Excluir transferencias de los cálculos
-    filtro_excluir_transferencias = Q(descripcion__icontains='Transferencia Enviada') | Q(descripcion__icontains='Transferencia Recibida')
-    transacciones_sin_transfer = transacciones.exclude(filtro_excluir_transferencias)
+    # 🚀 REFINAMIENTO CRÍTICO: Usar el nuevo campo 'es_transferencia' en los reportes
+    transacciones_sin_transfer = transacciones.filter(es_transferencia=False)
     
     # --- 2. CÁLCULO DEL RESUMEN TOTAL (Variable esperada: 'resumen_mensual') ---
     # Total de Ingresos/Egresos en el rango de 6 meses
