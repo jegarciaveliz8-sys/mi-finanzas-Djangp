@@ -21,7 +21,7 @@ User = get_user_model()
 class FinanzasLogicTestCase(TestCase):
     """Pruebas centradas en la lógica de modelos y cálculos."""
     # 🚨 CRÍTICO: Deshabilitar transacciones para forzar la limpieza completa (mantenemos)
-    transaction = False 
+    transaction = true 
 
     def setUp(self):
         # 1. Crear un usuario de prueba
@@ -209,7 +209,7 @@ class FinanzasLogicTestCase(TestCase):
 class VistasIntegracionTestCase(LiveServerTestCase):
     """Pruebas funcionales de las vistas críticas."""
     # 🚨 CRÍTICO: Deshabilitar transacciones para forzar la limpieza completa (mantenemos)
-    transaction = False 
+    transaction = true 
 
     def setUp(self):
         self.client = Client()
