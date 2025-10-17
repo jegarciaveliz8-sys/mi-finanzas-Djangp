@@ -43,7 +43,8 @@ urlpatterns = [
     path('transacciones/<int:pk>/eliminar/', views.eliminar_transaccion, name='eliminar_transaccion'),
     
     # RUTA DE TRANSFERENCIA
-    path('transferir/', views.transferir_monto, name='transferencia'), 
+    # 💡 CORREGIDO: Cambiado 'name='transferencia'' a 'name='transferir_monto''
+    path('transferir/', views.transferir_monto, name='transferir_monto'), 
 
     # =========================================================
     # 5. CRUD de Presupuestos
