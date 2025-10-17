@@ -266,10 +266,13 @@
 {% endblock %} 
 
 {% block extra_js %}
+    {% comment %} Carga de librería Chart.js si se requiere {% endcomment %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function () {
-            // CRÍTICO: Asegurarse de que chart_data_json se pasa desde la vista con json.dumps()
-            const chartDataJson = JSON.parse('{{ chart_data_json | safe }}');
+            // CRÍTICO: Corrección para asegurar que la variable JSON se pueda parsear correctamente.
+            // Se utiliza 'escapejs' para manejar los caracteres de escape dentro de la cadena JSON.
+            const chartDataJson = JSON.parse("{{ chart_data_json | escapejs | safe }}");
             const chartContainer = document.getElementById('gastosChart').parentNode;
             const labelsLength = chartDataJson.labels ? chartDataJson.labels.length : 0;
             
@@ -330,4 +333,3 @@
         });
     </script>
 {% endblock %}
-
