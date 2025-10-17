@@ -13,7 +13,7 @@ from dateutil.relativedelta import relativedelta
 from decimal import Decimal 
 import json 
 import calendar 
-
+from django.core.serializers.json import DjangoJSONEncoder # Necesario para serializar QuerySets
 # ========================================================
 # 🔑 IMPORTACIONES CONSOLIDADAS DE MODELOS Y FORMULARIOS
 # ========================================================
@@ -100,11 +100,11 @@ def resumen_financiero(request):
         ).aggregate(
             total_gastado=Coalesce(Sum('monto'), Decimal(0), output_field=DecimalField())
         )['total_gastado']
-        
+       
         gasto_actual = abs(gasto_actual_q)
         restante = presupuesto.monto_limite - gasto_actual
         porcentaje = (gasto_actual / presupuesto.monto_limite) * 100 if presupuesto.monto_limite > 0 else 0
-        
+       
         # Lógica simple de color de barra
         color_barra = 'bg-success'
         if porcentaje > 75:
@@ -126,21 +126,21 @@ def resumen_financiero(request):
     context = {
         'cuentas': cuentas,
         'saldo_total': saldo_total,
-        
+       
         # Datos del mes
         'ingresos_mes': totales_mes['ingresos'],
         # Usamos abs() para mostrar los gastos como un valor positivo, como es común en UI
         'gastos_mes': abs(totales_mes['gastos']), 
         'mes_actual_str': hoy.strftime("%B %Y"),
-        
+       
         # Nuevos datos para el panel
         'ultimas_transacciones': ultimas_transacciones,
         'chart_data_json': chart_data_json, 
         'resultados_presupuesto': resultados_presupuesto, 
-        
+       
         # 💡 CORRECCIÓN APLICADA: Usar 'form_transferencia' para el modal del dashboard
         'form_transferencia': TransferenciaForm(user=request.user),
-        
+       
         'estado_financiero': {'tipo': 'alert-info', 'mensaje': 'Bienvenido a tu resumen financiero.', 'icono': 'fas fa-info-circle'}
     }
     return render(request, 'mi_finanzas/resumen_financiero.html', context)
@@ -159,7 +159,6 @@ class CuentasListView(ListView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         # 💡 NOTA: Uso 'form' aquí, asumiendo que el modal en cuentas_lista.html lo busca como 'form'.
-        # Si tienes problemas, cambia esta clave a 'form_transferencia'
         context['form'] = TransferenciaForm(user=self.request.user) 
         return context
 
@@ -191,7 +190,6 @@ def transferir_monto(request):
             monto = form.cleaned_data['monto']
 
             # Verificación de Saldo: Previene transferencias si el saldo no es suficiente.
-            # Nota: Solo se aplica si el saldo es positivo, si es una deuda (negativo) no aplica.
             if cuenta_origen.saldo < monto and cuenta_origen.saldo >= 0:
                 messages.error(request, 'Saldo insuficiente en la cuenta de origen.')
                 return redirect('mi_finanzas:resumen_financiero')
@@ -199,7 +197,7 @@ def transferir_monto(request):
             # Actualizar saldos y registrar transacciones
             cuenta_origen.saldo -= monto
             cuenta_destino.saldo += monto
-            
+           
             cuenta_origen.save()
             cuenta_destino.save()
 
@@ -230,7 +228,7 @@ def transferir_monto(request):
             for field, errors in form.errors.items():
                 for error in errors:
                     messages.error(request, f"Error en {field}: {error}")
-            
+         
     # Redirigir siempre si no se pudo completar el POST (para evitar re-envíos)
     return redirect('mi_finanzas:resumen_financiero')
 
@@ -322,12 +320,12 @@ def anadir_transaccion(request):
         if form.is_valid():
             transaccion = form.save(commit=False)
             transaccion.usuario = request.user
-            
+           
             # Ajustar saldo de la cuenta antes de guardar
             cuenta = transaccion.cuenta
             cuenta.saldo += transaccion.monto # Si es egreso, monto es negativo, por lo que resta
             cuenta.save()
-            
+           
             transaccion.save()
             messages.success(request, "¡Transacción añadida con éxito!")
             return redirect('mi_finanzas:transacciones_lista')
@@ -362,20 +360,20 @@ def editar_transaccion(request, pk):
         if form.is_valid():
             transaccion_nueva = form.save(commit=False)
             monto_nuevo = transaccion_nueva.monto
-            
+           
             # Lógica de ajuste de saldos (CRÍTICA)
             cuenta = transaccion_antigua.cuenta
-            
+           
             # 1. Deshacer el impacto del monto original
             cuenta.saldo -= monto_original
-            
+           
             # 2. Aplicar el impacto del monto nuevo
             cuenta.saldo += monto_nuevo
-            
+           
             # 3. Guardar los cambios
             cuenta.save()
             transaccion_nueva.save() 
-            
+           
             messages.success(request, "¡Transacción actualizada con éxito!")
             return redirect('mi_finanzas:transacciones_lista') 
         else:
@@ -505,95 +503,67 @@ def eliminar_presupuesto(request, pk):
 
 
 # ========================================================
-# VISTAS DE REPORTES
+# VISTAS DE REPORTES (UNIFICADA Y CORREGIDA)
 # ========================================================
 
 @login_required
 def reportes_financieros(request):
-    """Vista principal para mostrar diferentes tipos de reportes."""
+    """
+    Genera reportes financieros agregando datos de ingresos y egresos
+    por los últimos 6 meses completos.
+    """
     
-    # 1. Calcular rango de fechas (ejemplo: últimos 6 meses)
+    # 1. Determinar el rango de los últimos 6 meses completos
     hoy = date.today()
-    fecha_inicio = hoy - relativedelta(months=5)
+    # 5 meses atrás para obtener el sexto mes
+    fecha_6_meses_atras = hoy - relativedelta(months=5) 
+    # 1er día del mes de inicio (e.g., 01 de Mayo)
+    fecha_inicio = fecha_6_meses_atras.replace(day=1) 
     
-    # 2. Obtener transacciones filtradas
     transacciones = Transaccion.objects.filter(
         usuario=request.user, 
         fecha__gte=fecha_inicio
-    ).order_by('fecha')
+    )
     
-    # 3. Total de Ingresos y Egresos en el rango
-    totales = transacciones.aggregate(
+    # --- 2. CÁLCULO DEL RESUMEN TOTAL (Variable esperada: 'resumen_mensual') ---
+    # Total de Ingresos/Egresos en el rango de 6 meses
+    totales_agregados = transacciones.aggregate(
         ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0), output_field=DecimalField()),
         egresos=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField())
     )
     
-    context = {
-        'transacciones': transacciones,
-        'totales': totales,
-        'fecha_inicio': fecha_inicio,
-        'fecha_fin': hoy,
-        'form': TransferenciaForm(user=request.user), # Para el modal
+    # Prepara el diccionario 'resumen_mensual' esperado por el HTML
+    resumen_mensual = {
+        'ingresos': totales_agregados['ingresos'],
+        # Multiplicar egresos por -1 para que aparezca POSITIVO como "Gastos"
+        'gastos': totales_agregados['egresos'] * -1, 
+        'neto': totales_agregados['ingresos'] + totales_agregados['egresos']
     }
     
-    return render(request, 'mi_finanzas/reportes_financieros.html', context)
-
-
-
-
-from django.db.models.functions import Coalesce
-from datetime import date
-from dateutil.relativedelta import relativedelta
-from django.db.models import Sum, DecimalField, Q 
-from decimal import Decimal
-from django.contrib.auth.decorators import login_required
-# Importa tu modelo Transaccion, y el formulario TransferenciaForm si es necesario
-
-@login_required
-def reportes_financieros(request):
-    """Genera reportes financieros agregando datos por los últimos 6 meses completos."""
+    # --- 3. CÁLCULO DE GASTOS POR CATEGORÍA (Variable esperada: 'gastos_por_categoria') ---
+    gastos_por_categoria_qs = transacciones.filter(
+        monto__lt=0, 
+        categoria__isnull=False
+    ).values(
+        'categoria__nombre'
+    ).annotate(
+        # Usa el alias 'total' esperado por la plantilla
+        total=Coalesce(Sum('monto'), Decimal(0), output_field=DecimalField()) * -1
+    ).order_by('-total')
     
-    # PASO 1: Determinar el rango de los últimos 6 meses completos
-    hoy = date.today()
+    # Prepara la variable JSON para el script del gráfico
+    gastos_por_categoria_json = json.dumps(list(gastos_por_categoria_qs), cls=DjangoJSONEncoder)
     
-    # Retrocede 5 meses para llegar al sexto mes (ej: Oct -> Mayo)
-    fecha_6_meses_atras = hoy - relativedelta(months=5) 
-    
-    # Establece la fecha de inicio al primer día del mes de ese sexto mes (ej: 01 de Mayo)
-    fecha_inicio = fecha_6_meses_atras.replace(day=1) 
-    
-    # PASO 2: Filtrar todas las transacciones dentro de ese rango
-    transacciones = Transaccion.objects.filter(
-        usuario=request.user, 
-        fecha__gte=fecha_inicio
-    )
-    
-    # PASO 3: Agregación Total de Ingresos y Egresos en el rango de 6 meses
-    totales = transacciones.aggregate(
-        # Suma todos los montos positivos (Ingresos)
-        ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0), output_field=DecimalField()),
-        
-        # Suma todos los montos negativos (Egresos) y los multiplica por -1 para hacerlos POSITIVOS
-        egresos_abs=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField()) * -1
-    )
-
-    # PASO 4: Agregación Mensual para Gráficos de Tendencias (Egresos y Ingresos por mes)
-    flujo_mensual = transacciones.values('fecha__year', 'fecha__month').annotate(
-        ingresos_mes=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0)),
-        
-        # Egresos como valor positivo por mes
-        egresos_mes=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0)) * -1
-    ).order_by('fecha__year', 'fecha__month')
-    
-    # PASO 5: Preparar el contexto para la plantilla
+    # --- 4. Preparar el contexto final ---
     context = {
-        'transacciones': transacciones.order_by('-fecha'), # Lista de transacciones para el reporte
-        'totales': totales,                               # Totales de Ingresos/Egresos
-        'flujo_mensual': flujo_mensual,                   # Desglose de tendencias mensuales
-        'fecha_inicio': fecha_inicio,
-        'fecha_fin': hoy,
-        # Si tienes un formulario modal en la página de reportes:
-        # 'form': TransferenciaForm(user=request.user), 
+        # Lo que la plantilla espera:
+        'resumen_mensual': resumen_mensual, 
+        'gastos_por_categoria': gastos_por_categoria_qs, # QuerySet para la tabla HTML
+        'gastos_por_categoria_json': gastos_por_categoria_json, # JSON para el script JS
+        
+        # Datos adicionales
+        'titulo': f"Reporte de Flujo de Caja Mensual ({fecha_inicio.strftime('%b %Y')} a {hoy.strftime('%b %Y')})",
+        'form': TransferenciaForm(user=request.user), # Para el modal
     }
     
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
