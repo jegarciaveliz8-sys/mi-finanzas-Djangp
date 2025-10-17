@@ -5,6 +5,10 @@ from decimal import Decimal
 from datetime import date
 from .models import Cuenta, Transaccion, Categoria, Presupuesto
 from .forms import TransaccionForm
+# --- ¡NUEVAS IMPORTACIONES NECESARIAS! ---
+from django.db.models import Sum, Q, DecimalField
+from django.db.models.functions import Coalesce
+
 
 User = get_user_model()
 
