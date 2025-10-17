@@ -1,4 +1,4 @@
-from django.test import TestCase, Client, LiveServerTestCase # 👈 Importación CRÍTICA
+from django.test import TestCase, Client, LiveServerTestCase
 from django.urls import reverse
 from django.contrib.auth import get_user_model
 from decimal import Decimal
@@ -16,11 +16,12 @@ User = get_user_model()
 
 # ========================================================
 # 1. PRUEBAS DE MODELOS Y LÓGICA DE NEGOCIO CRÍTICA
-# (Usa TestCase, que es más rápido)
 # ========================================================
 
 class FinanzasLogicTestCase(TestCase):
     """Pruebas centradas en la lógica de modelos y cálculos."""
+    # 🚨 CORRECCIÓN CRÍTICA: Deshabilitar transacciones para forzar la limpieza completa
+    transaction = False 
 
     def setUp(self):
         # 1. Crear un usuario de prueba
@@ -31,22 +32,13 @@ class FinanzasLogicTestCase(TestCase):
 
         # 2. Crear cuentas (saldos iniciales)
         self.cuenta_principal = Cuenta.objects.create(
-            usuario=self.user, 
-            nombre='Principal', 
-            tipo='CHEQUES', 
-            saldo=Decimal('1000.00')
+            usuario=self.user, nombre='Principal', tipo='CHEQUES', saldo=Decimal('1000.00')
         )
         self.cuenta_ahorros = Cuenta.objects.create(
-            usuario=self.user, 
-            nombre='Ahorros', 
-            tipo='AHORROS', 
-            saldo=Decimal('5000.00')
+            usuario=self.user, nombre='Ahorros', tipo='AHORROS', saldo=Decimal('5000.00')
         )
         self.tarjeta_credito = Cuenta.objects.create(
-            usuario=self.user, 
-            nombre='Tarjeta Visa', 
-            tipo='TARJETA', 
-            saldo=Decimal('-200.00')
+            usuario=self.user, nombre='Tarjeta Visa', tipo='TARJETA', saldo=Decimal('-200.00')
         )
 
         # 3. Crear categorías
@@ -69,7 +61,7 @@ class FinanzasLogicTestCase(TestCase):
             descripcion='Compra en supermercado inicial'
         )
          
-        # 🚨 CORRECCIÓN CRÍTICA: Forzar saldos al estado estable esperado (2500.00)
+        # Forzar saldos al estado estable esperado (2500.00)
         self.cuenta_principal.saldo = Decimal('2500.00')
         self.cuenta_ahorros.saldo = Decimal('5000.00')
         self.tarjeta_credito.saldo = Decimal('-200.00')
@@ -156,10 +148,10 @@ class FinanzasLogicTestCase(TestCase):
             gastos_abs=Coalesce(Sum('monto', filter=Q(tipo='EGRESO')), Decimal(0))
         )
          
-        self.assertEqual(totales['ingresos'], Decimal('2100.00')) # 2000 (inicial) + 100 (real)
-        self.assertEqual(totales['gastos_abs'], Decimal('520.00')) # 500 (inicial) + 20 (real)
+        self.assertEqual(totales['ingresos'], Decimal('2100.00'))
+        self.assertEqual(totales['gastos_abs'], Decimal('520.00'))
 
-        # 🚨 CORRECCIÓN FINAL: Restablecer saldos manualmente para el siguiente test.
+        # Restablecer saldos manualmente para el siguiente test.
         self.cuenta_principal.saldo = Decimal('2500.00')
         self.cuenta_ahorros.saldo = Decimal('5000.00')
         self.tarjeta_credito.saldo = Decimal('-200.00')
@@ -193,7 +185,7 @@ class FinanzasLogicTestCase(TestCase):
         with transaction.atomic():
             tx_origen.delete()
             try:
-                tx_destino.delete() # Usar try/except es más seguro en entornos de test
+                tx_destino.delete()
             except Transaccion.DoesNotExist:
                 pass
             
@@ -210,11 +202,12 @@ class FinanzasLogicTestCase(TestCase):
          
 # --------------------------------------------------------
 # C. PRUEBAS DE INTEGRACIÓN DE VISTAS
-# (Usa LiveServerTestCase para forzar aislamiento de BD)
 # --------------------------------------------------------
 
-class VistasIntegracionTestCase(LiveServerTestCase): # 👈 Cambio CRÍTICO aquí
+class VistasIntegracionTestCase(LiveServerTestCase):
     """Pruebas funcionales de las vistas críticas."""
+    # 🚨 CORRECCIÓN CRÍTICA: Deshabilitar transacciones para forzar la limpieza completa
+    transaction = False 
 
     def setUp(self):
         self.client = Client()
@@ -238,7 +231,7 @@ class VistasIntegracionTestCase(LiveServerTestCase): # 👈 Cambio CRÍTICO aqu�
             categoria=self.cat_gasto, fecha=date.today(), descripcion='Transaccion de prueba para eliminar'
         )
         
-        # 🚨 CORRECCIÓN CRÍTICA: Forzar saldos al estado estable.
+        # Forzar saldos al estado estable.
         self.cuenta1.saldo = Decimal('500.00') 
         self.cuenta2.saldo = Decimal('950.00') 
         
@@ -321,7 +314,7 @@ class VistasIntegracionTestCase(LiveServerTestCase): # 👈 Cambio CRÍTICO aqu�
          
         self.assertEqual(gasto_acumulado, Decimal('450.00'))
         
-        # 🚨 Restablecer saldos para el siguiente test.
+        # Restablecer saldos para el siguiente test.
         self.cuenta_principal.saldo = Decimal('2500.00')
         self.cuenta_ahorros.saldo = Decimal('5000.00')
         self.tarjeta_credito.saldo = Decimal('-200.00')
@@ -329,4 +322,3 @@ class VistasIntegracionTestCase(LiveServerTestCase): # 👈 Cambio CRÍTICO aqu�
         self.cuenta_principal.save()
         self.cuenta_ahorros.save()
         self.tarjeta_credito.save()
-
