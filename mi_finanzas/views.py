@@ -182,7 +182,7 @@ class TransaccionesListView(ListView):
         return Transaccion.objects.filter(usuario=self.request.user).order_by('-fecha')
 
 # ========================================================
-# VISTA DE TRANSFERENCIA (Lógica de Negocio - CORREGIDA)
+# VISTA DE TRANSFERENCIA (Lógica de Negocio)
 # ========================================================
 
 @login_required
@@ -202,23 +202,21 @@ def transferir_monto(request):
 
             # 2. Bloqueo optimista y Verificación de Saldo
             # Se usa select_for_update para prevenir problemas de concurrencia
+            # Nota: Dado que estamos dentro de @transaction.atomic, el bloqueo es seguro.
             cuenta_origen_bloqueada = Cuenta.objects.select_for_update().get(pk=cuenta_origen.pk)
             cuenta_destino_bloqueada = Cuenta.objects.select_for_update().get(pk=cuenta_destino.pk)
 
-            # 🚨 CORRECCIÓN CRÍTICA DE SALDO:
-            # Una transferencia de origen solo puede fallar si el saldo disponible (saldo actual - monto)
-            # es menor que 0 Y la cuenta NO es una tarjeta de crédito o similar que permite saldo negativo.
-            # Asumimos: Las cuentas con saldo negativo (TARJETA, PRESTAMO) pueden transferir hasta su límite negativo.
-            # Simplificación: Si el nuevo saldo es negativo y NO es una cuenta de deuda/crédito, fallar.
-            
+            # Verificar si la cuenta de origen es una de aquellas que no debe tener saldo negativo
             saldo_futuro_origen = cuenta_origen_bloqueada.saldo - monto
 
-            # Verificar si la cuenta de origen es una de aquellas que no debe tener saldo negativo
             if saldo_futuro_origen < 0 and cuenta_origen_bloqueada.tipo not in ['TARJETA', 'PRESTAMO', 'HIPOTECA', 'AUTO']:
                 messages.error(request, 'Saldo insuficiente en la cuenta de origen para realizar esta transferencia.')
                 return redirect('mi_finanzas:resumen_financiero')
 
             # 3. Actualizar saldos (Manual para transferencias)
+            # Nota: Aquí se mantiene la lógica manual de saldo y .save() porque es una 
+            # lógica especial de transferencia (EGRESO y INGRESO) que maneja un par de Cuentas
+            # y se beneficia del bloqueo select_for_update().
             cuenta_origen_bloqueada.saldo = saldo_futuro_origen
             cuenta_destino_bloqueada.saldo += monto
             
@@ -232,7 +230,7 @@ def transferir_monto(request):
                 usuario=request.user, 
                 cuenta=cuenta_origen_bloqueada, 
                 tipo='EGRESO', 
-                # El monto es negativo para el Egreso
+                # Se almacena con signo NEGATIVO para que el Formulario (GET) lo muestre positivo
                 monto=-monto, 
                 descripcion=f"Transferencia Enviada a {cuenta_destino.nombre} ({descripcion})",
                 fecha=fecha,
@@ -250,9 +248,6 @@ def transferir_monto(request):
             )
             
             # Enlazar las transacciones (usando update para evitar llamar save() y su lógica de saldo)
-            # Nota: Al usar save() del modelo en el test, Django detecta que el objeto existe
-            # y ejecuta la lógica de actualización, por eso el test funcionó bien con .save(). 
-            # Aquí usamos update() para ser más explícitos y seguros.
             Transaccion.objects.filter(pk=tx_origen.pk).update(transaccion_relacionada=tx_destino)
             Transaccion.objects.filter(pk=tx_destino.pk).update(transaccion_relacionada=tx_origen)
             
@@ -263,7 +258,6 @@ def transferir_monto(request):
             # Mostrar errores de validación del formulario
             for field, errors in form.errors.items():
                 for error in errors:
-                    # El test espera un mensaje general de error si falla la validación (ej. origen=destino)
                     messages.error(request, f"Error en el formulario de transferencia: {error}")
             
     # Redirigir siempre si no se pudo completar el POST (para evitar re-envíos)
@@ -344,7 +338,7 @@ def eliminar_cuenta(request, pk):
     return render(request, 'mi_finanzas/eliminar_cuenta_confirm.html', {'cuenta': cuenta}) 
 
 # ========================================================
-# VISTAS DE TRANSACCIONES (CRUD) - CORREGIDAS
+# VISTAS DE TRANSACCIONES (CRUD) 
 # ========================================================
 
 @login_required
@@ -357,10 +351,10 @@ def anadir_transaccion(request):
             transaccion = form.save(commit=False)
             transaccion.usuario = request.user
             
-            # 💡 CORRECCIÓN CRÍTICA: Aplicar el signo al monto si es un egreso.
-            # Esto prepara el objeto para el save() del modelo que solo suma.
-            if transaccion.tipo == 'EGRESO' and transaccion.monto > 0:
-                transaccion.monto = -transaccion.monto
+            # 💡 NOTA: El modelo Transaccion.save() espera un 'monto' POSITIVO 
+            # y usa el 'tipo' para decidir si sumar o restar.
+            # Aquí se asegura que el valor sea positivo antes de guardar:
+            transaccion.monto = abs(transaccion.monto) 
             
             # 🔔 El método save() del modelo Transaccion maneja la actualización del saldo.
             transaccion.save() 
@@ -401,9 +395,9 @@ def editar_transaccion(request, pk):
         if form.is_valid():
             transaccion_nueva = form.save(commit=False)
             
-            # 💡 CORRECCIÓN CRÍTICA: Aplicar el signo al monto si es un egreso.
-            if transaccion_nueva.tipo == 'EGRESO' and transaccion_nueva.monto > 0:
-                transaccion_nueva.monto = -transaccion_nueva.monto
+            # 💡 NOTA: El modelo Transaccion.save() espera un 'monto' POSITIVO.
+            # Se asegura que el valor sea positivo antes de guardar:
+            transaccion_nueva.monto = abs(transaccion_nueva.monto)
             
             # 🔔 El método save() del modelo Transaccion maneja la reversión del viejo saldo 
             # y la aplicación del nuevo saldo, incluyendo el cambio de cuenta si aplica.
@@ -414,12 +408,10 @@ def editar_transaccion(request, pk):
         else:
             messages.error(request, "Error al actualizar la transacción. Revisa los campos.")
     else:
-        # Al instanciar el formulario, debemos asegurarnos de que el monto se muestre
-        # positivo si es un egreso (asumiendo que el formulario espera valores positivos
-        # para que el usuario no tenga que poner el signo manualmente).
-        if transaccion_antigua.tipo == 'EGRESO' and transaccion_antigua.monto < 0:
-            transaccion_antigua.monto = abs(transaccion_antigua.monto)
-            
+        # Al instanciar el formulario, nos aseguramos de que el monto se muestre
+        # como valor absoluto (positivo), ya que el formulario lo espera así.
+        transaccion_antigua.monto = abs(transaccion_antigua.monto)
+        
         form = TransaccionForm(instance=transaccion_antigua, user=request.user)
 
     transferencia_form = TransferenciaForm(user=request.user)
@@ -436,49 +428,40 @@ def editar_transaccion(request, pk):
 @login_required
 @transaction.atomic
 def eliminar_transaccion(request, pk):
-    """Vista para eliminar una transacción y revertir su efecto en el saldo de la cuenta."""
+    """
+    Vista para eliminar una transacción y revertir su efecto en el saldo de la cuenta.
+    
+    ✅ CORRECCIÓN CLAVE: Esta vista depende completamente del método 
+    Transaccion.delete() del modelo para actualizar el saldo.
+    """
     transaccion = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
     
     # 🚀 REFINAMIENTO CRÍTICO: Eliminar la transferencia completa
     if transaccion.es_transferencia and transaccion.transaccion_relacionada:
-        # Se obtiene el par DE LA BASE DE DATOS para asegurar que no se elimina un objeto ya eliminado
-        try:
-            transaccion_par = Transaccion.objects.get(pk=transaccion.transaccion_relacionada.pk)
-        except Transaccion.DoesNotExist:
-            transaccion_par = None # Puede que ya se haya eliminado, continuar.
         
-        # Lógica de reversión del saldo de ambas cuentas
-        # (Se revierte el impacto directamente en la DB)
-        with transaction.atomic():
-            # 1. Revertir transacción original (Egreso en Origen / Ingreso en Destino)
-            cuenta = transaccion.cuenta
-            cuenta.saldo -= transaccion.monto # Restar un egreso (-X) es sumar (+X)
-            cuenta.save()
-            
-            # 2. Revertir transacción par (Ingreso en Origen / Egreso en Destino)
-            if transaccion_par:
-                cuenta_par = transaccion_par.cuenta
-                cuenta_par.saldo -= transaccion_par.monto # Restar un ingreso (+Y) es restar (-Y)
-                cuenta_par.save()
-                transaccion_par.delete()
-
+        # Guardamos el PK de la transacción relacionada para buscarla después de la eliminación.
+        transaccion_par_pk = transaccion.transaccion_relacionada.pk
+        
+        if request.method == 'POST':
+            # 1. Elimina la transacción actual (invoca Transaccion.delete() y revierte saldo)
             transaccion.delete()
-        
-        messages.success(request, "¡Transferencia eliminada y saldos ajustados con éxito!")
-        return redirect('mi_finanzas:transacciones_lista')
+            
+            # 2. Busca y elimina la transacción par (invoca su Transaccion.delete() y revierte el otro saldo)
+            try:
+                transaccion_par = Transaccion.objects.get(pk=transaccion_par_pk)
+                transaccion_par.delete()
+            except Transaccion.DoesNotExist:
+                pass # El par ya fue eliminado, no pasa nada.
+
+            messages.success(request, "¡Transferencia eliminada y saldos ajustados con éxito!")
+            return redirect('mi_finanzas:transacciones_lista')
+
     # -----------------------------------------------------------
+    # Lógica de Transacción Normal (NO transferencia)
     
-    if request.method == 'POST':
-        # Transacción Normal (NO transferencia)
-        cuenta = transaccion.cuenta
-        monto = transaccion.monto 
-        
-        # Lógica de Reversión para transacciones normales 
-        # Restamos el impacto. Si el monto es -50 (egreso), el saldo sube 50.
-        # Si el monto es 100 (ingreso), el saldo baja 100.
-        cuenta.saldo -= monto
-        
-        cuenta.save()
+    elif request.method == 'POST':
+        # ✅ CORRECCIÓN CLAVE: Simplemente llamamos a .delete()
+        # El método Transaccion.delete() en el modelo se encarga de la reversión atómica del saldo.
         transaccion.delete()
         
         messages.success(request, "¡Transacción eliminada y saldo ajustado con éxito!")
