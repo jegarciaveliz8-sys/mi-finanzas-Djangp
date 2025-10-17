@@ -562,7 +562,7 @@ def reportes_financieros(request):
         'gastos_por_categoria_json': gastos_por_categoria_json, # JSON para el script JS
         
         # Datos adicionales
-        'titulo': f"Reporte de Flujo de Caja Mensual ({fecha_inicio.strftime('%b %Y')} a {hoy.strftime('%b %Y')})",
+        'titulo': f"Reporte de Flujo de Caja por Período  ({fecha_inicio.strftime('%b %Y')} a {hoy.strftime('%b %Y')})",
         'form': TransferenciaForm(user=request.user), # Para el modal
     }
     
