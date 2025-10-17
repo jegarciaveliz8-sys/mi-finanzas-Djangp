@@ -40,14 +40,7 @@ def resumen_financiero(request):
     """Muestra el resumen financiero principal (Dashboard)."""
     cuentas = Cuenta.objects.filter(usuario=request.user)
     
-    # --- 🔑 CORRECCIÓN CRÍTICA: CÁLCULO DEL SALDO TOTAL NETO 🔑 ---
-    # Se debe sumar el saldo de las cuentas de activo y restar el saldo de las cuentas de pasivo.
-    # El filtro asume que las cuentas de Pasivo son aquellas que NO tienen los tipos de Activo.
-    
-    # NOTA: Si el saldo de las cuentas de pasivo YA es negativo en la DB, solo se requiere la suma general.
-    # Como te aseguraste que el saldo de las deudas sea negativo con el forms.py corregido, 
-    # la suma simple debería ser suficiente para el Saldo Total Neto (ACTIVOS + PASIVOS_NEGATIVOS).
-    
+    # Cálculo del Saldo Total Neto (Activos + Pasivos Negativos)
     saldo_total = cuentas.aggregate(total=Coalesce(Sum('saldo'), Decimal(0), output_field=DecimalField()))['total'] 
     
     # --- LÓGICA DE FECHAS Y TRANSACCIONES DEL MES ---
@@ -91,7 +84,7 @@ def resumen_financiero(request):
     # --- 3. LÓGICA DE PRESUPUESTOS ---
     presupuestos_activos_list = Presupuesto.objects.filter(
         usuario=request.user, 
-        # Filtro por mes/año del presupuesto (asumiendo que el modelo tiene 'mes' y 'anio')
+        # Filtro por mes/año del presupuesto
         mes=hoy.month,
         anio=hoy.year
     )
@@ -145,8 +138,9 @@ def resumen_financiero(request):
         'chart_data_json': chart_data_json, 
         'resultados_presupuesto': resultados_presupuesto, 
         
-        # Formulario de Transferencia para modal
-        'form': TransferenciaForm(user=request.user),
+        # 💡 CORRECCIÓN APLICADA: Usar 'form_transferencia' para el modal del dashboard
+        'form_transferencia': TransferenciaForm(user=request.user),
+        
         'estado_financiero': {'tipo': 'alert-info', 'mensaje': 'Bienvenido a tu resumen financiero.', 'icono': 'fas fa-info-circle'}
     }
     return render(request, 'mi_finanzas/resumen_financiero.html', context)
@@ -164,8 +158,9 @@ class CuentasListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        # Formulario de Transferencia para modal
-        context['form'] = TransferenciaForm(user=self.request.user)
+        # 💡 NOTA: Uso 'form' aquí, asumiendo que el modal en cuentas_lista.html lo busca como 'form'.
+        # Si tienes problemas, cambia esta clave a 'form_transferencia'
+        context['form'] = TransferenciaForm(user=self.request.user) 
         return context
 
 @method_decorator(login_required, name='dispatch')
@@ -195,10 +190,8 @@ def transferir_monto(request):
             cuenta_destino = form.cleaned_data['cuenta_destino']
             monto = form.cleaned_data['monto']
 
-            # Verificación de Saldo (solo para origen, ya que el destino puede ser una deuda)
-            # Nota: Si una cuenta de origen es una deuda, su saldo es negativo (ej. -2000), 
-            # y si el monto a transferir es 100, la condición se cumple (-2000 < 100), 
-            # lo cual es correcto.
+            # Verificación de Saldo: Previene transferencias si el saldo no es suficiente.
+            # Nota: Solo se aplica si el saldo es positivo, si es una deuda (negativo) no aplica.
             if cuenta_origen.saldo < monto and cuenta_origen.saldo >= 0:
                 messages.error(request, 'Saldo insuficiente en la cuenta de origen.')
                 return redirect('mi_finanzas:resumen_financiero')
@@ -237,7 +230,7 @@ def transferir_monto(request):
             for field, errors in form.errors.items():
                 for error in errors:
                     messages.error(request, f"Error en {field}: {error}")
-        
+            
     # Redirigir siempre si no se pudo completar el POST (para evitar re-envíos)
     return redirect('mi_finanzas:resumen_financiero')
 
@@ -289,15 +282,11 @@ def editar_cuenta(request, pk):
     transferencia_form = TransferenciaForm(user=request.user)
     
     context = {
-        # **Esta es la clave de Transferencia, solo para modals.**
-        'form': transferencia_form,  
-        # **Esta es la clave para el formulario principal de Edición/Creación.**
-        'cuenta_form': form,         
+        'form': transferencia_form,  # Clave de Transferencia
+        'cuenta_form': form,         # Clave para el formulario principal de Edición/Creación.
         'cuenta': cuenta
     }
 
-    # El problema está en la plantilla (editar_cuenta.html) que debe usar 'cuenta_form' 
-    # en lugar de 'form' para el formulario principal.
     return render(request, 'mi_finanzas/editar_cuenta.html', context)
 
 @login_required
@@ -352,8 +341,8 @@ def anadir_transaccion(request):
     transferencia_form = TransferenciaForm(user=request.user)
     
     context = {
-        'form': form,
-        'form_transferencia': transferencia_form, 
+        'form': form, # Formulario principal de Transacción
+        'form_transferencia': transferencia_form, # Formulario de Transferencia para el modal
         'titulo': "Añadir Nueva Transacción",
     }
     return render(request, 'mi_finanzas/anadir_transaccion.html', context)
