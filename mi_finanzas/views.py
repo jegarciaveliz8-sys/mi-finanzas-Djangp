@@ -202,7 +202,6 @@ def transferir_monto(request):
 
             # 2. Bloqueo optimista y Verificación de Saldo
             # Se usa select_for_update para prevenir problemas de concurrencia
-            # Nota: Dado que estamos dentro de @transaction.atomic, el bloqueo es seguro.
             cuenta_origen_bloqueada = Cuenta.objects.select_for_update().get(pk=cuenta_origen.pk)
             cuenta_destino_bloqueada = Cuenta.objects.select_for_update().get(pk=cuenta_destino.pk)
 
@@ -214,9 +213,6 @@ def transferir_monto(request):
                 return redirect('mi_finanzas:resumen_financiero')
 
             # 3. Actualizar saldos (Manual para transferencias)
-            # Nota: Aquí se mantiene la lógica manual de saldo y .save() porque es una 
-            # lógica especial de transferencia (EGRESO y INGRESO) que maneja un par de Cuentas
-            # y se beneficia del bloqueo select_for_update().
             cuenta_origen_bloqueada.saldo = saldo_futuro_origen
             cuenta_destino_bloqueada.saldo += monto
             
@@ -230,21 +226,21 @@ def transferir_monto(request):
                 usuario=request.user, 
                 cuenta=cuenta_origen_bloqueada, 
                 tipo='EGRESO', 
-                # Se almacena con signo NEGATIVO para que el Formulario (GET) lo muestre positivo
-                monto=-monto, 
+                # ✅ CORRECCIÓN CRÍTICA: El monto debe ser POSITIVO/ABSOLUTO (monto)
+                monto=monto, 
                 descripcion=f"Transferencia Enviada a {cuenta_destino.nombre} ({descripcion})",
                 fecha=fecha,
-                es_transferencia=True # <-- ¡CRÍTICO!
+                es_transferencia=True 
             )
             # Ingreso (Destino)
             tx_destino = Transaccion.objects.create(
                 usuario=request.user, 
                 cuenta=cuenta_destino_bloqueada, 
                 tipo='INGRESO', 
-                monto=monto,
+                monto=monto, # Correcto, es positivo
                 descripcion=f"Transferencia Recibida de {cuenta_origen.nombre} ({descripcion})",
                 fecha=fecha,
-                es_transferencia=True # <-- ¡CRÍTICO!
+                es_transferencia=True
             )
             
             # Enlazar las transacciones (usando update para evitar llamar save() y su lógica de saldo)
