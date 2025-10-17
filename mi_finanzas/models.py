@@ -49,6 +49,7 @@ class Cuenta(models.Model):
     usuario = models.ForeignKey(User, on_delete=models.CASCADE)
     nombre = models.CharField(max_length=100)
     tipo = models.CharField(max_length=15, choices=TIPOS_CUENTA) 
+    # El campo de saldo es 'saldo', NO 'balance'.
     saldo = models.DecimalField(max_digits=15, decimal_places=2, default=0.00) 
 
     class Meta:
@@ -79,7 +80,7 @@ class Categoria(models.Model):
         return f"[{self.get_tipo_display()}] {self.nombre}"
 
 # ========================================================
-# --- 3. MODELO TRANSACCION (Lógica de Actualización de Saldo Añadida) ---
+# --- 3. MODELO TRANSACCION (Lógica de Actualización de Saldo) ---
 # ========================================================
 
 class Transaccion(models.Model):
@@ -94,7 +95,6 @@ class Transaccion(models.Model):
     descripcion = models.TextField(blank=True, null=True)
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     
-    # 🌟 REFINAMIENTO AÑADIDO para robustez y filtrado 🌟
     es_transferencia = models.BooleanField(default=False) 
     
     transaccion_relacionada = models.ForeignKey(
@@ -113,7 +113,7 @@ class Transaccion(models.Model):
         return f"{self.tipo} de {self.monto} en {self.cuenta.nombre}"
 
     # ------------------------------------------------------------------
-    # 💡 LÓGICA CRÍTICA DE MANTENIMIENTO DE SALDO (Save) 💡
+    # LÓGICA CRÍTICA DE MANTENIMIENTO DE SALDO (Save)
     # ------------------------------------------------------------------
 
     def save(self, *args, **kwargs):
@@ -124,10 +124,12 @@ class Transaccion(models.Model):
         if not is_new:
             try:
                 # Obtener el estado anterior de la transacción de la base de datos
-                old_transaccion = Transaccion.objects.get(pk=self.pk)
+                # Se usa .select_related('cuenta') para optimizar si la cuenta es diferente
+                old_transaccion = Transaccion.objects.select_related('cuenta').get(pk=self.pk)
                 old_monto = old_transaccion.monto
                 old_cuenta = old_transaccion.cuenta
             except Transaccion.DoesNotExist:
+                # Esto no debería ocurrir si is_new es False, pero es un buen manejo de errores
                 pass 
 
         # 1. Llamar al save original para guardar la nueva transacción/modificación
@@ -137,23 +139,23 @@ class Transaccion(models.Model):
         
         # Si la cuenta cambió (edición de cuenta):
         if old_cuenta and old_cuenta != self.cuenta:
-            # Revertir el monto anterior en la cuenta antigua
+            # Revertir el impacto del monto anterior en la cuenta antigua
+            # IMPORTANTE: Asume que el monto anterior tiene el signo correcto (positivo o negativo)
             old_cuenta.saldo -= old_monto
             old_cuenta.save()
         
-        # Si la cuenta no cambió O si es una nueva transacción O si la cuenta cambió:
-        # Se revierte el monto antiguo del saldo (o 0 si es nueva)
+        # En la cuenta actual (sea nueva, editada, o cambiada):
+        # Primero, revertir el monto antiguo (si era nueva, old_monto es 0.00)
         self.cuenta.saldo -= old_monto 
         
-        # Se aplica el nuevo monto al saldo
+        # Luego, aplicar el nuevo monto. 
+        # NOTA CLAVE: Esto funciona SOLO si los egresos se guardan como números NEGATIVOS.
         self.cuenta.saldo += self.monto
         
         # Guardar la cuenta (esto cubre los casos de nueva, edición de monto, y edición de cuenta)
         self.cuenta.save()
 
-    # ❌ ELIMINACIÓN DEL MÉTODO delete() ❌
-    # La lógica de ajuste de saldo para la eliminación se maneja ahora
-    # EXCLUSIVAMENTE en la vista `eliminar_transaccion` para evitar la doble reversión.
+    # Se mantiene la decisión de no incluir el método delete() y manejar la reversión en la vista.
 
 
 # ========================================================
