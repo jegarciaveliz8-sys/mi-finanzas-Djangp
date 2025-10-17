@@ -3,12 +3,15 @@ from django.urls import reverse
 from django.contrib.auth import get_user_model
 from decimal import Decimal
 from datetime import date
-from .models import Cuenta, Transaccion, Categoria, Presupuesto
-from .forms import TransaccionForm
-# --- ¡NUEVAS IMPORTACIONES NECESARIAS! ---
-from django.db.models import Sum, Q, DecimalField
-from django.db.models.functions import Coalesce
 
+# --- CORRECCIÓN CRÍTICA DE IMPORTACIÓN Y AGREGACIÓN ---
+# 1. Importación explícita de modelos para evitar errores de ruta relativa.
+from mi_finanzas.models import Cuenta, Transaccion, Categoria, Presupuesto 
+from mi_finanzas.forms import TransaccionForm
+
+# 2. Importaciones necesarias para las funciones de agregación (Sum, Q) y campos (DecimalField).
+from django.db.models import Sum, Q, DecimalField 
+from django.db.models.functions import Coalesce 
 
 User = get_user_model()
 
@@ -26,7 +29,7 @@ class FinanzasLogicTestCase(TestCase):
             password='testpassword'
         )
 
-        # 2. Crear cuentas
+        # 2. Crear cuentas (TODOS LOS SALDOS USAN 'saldo=')
         self.cuenta_principal = Cuenta.objects.create(
             usuario=self.user, 
             nombre='Principal', 
@@ -214,7 +217,7 @@ class VistasIntegracionTestCase(TestCase):
         )
         self.client.login(username='viewuser', password='viewpassword')
         
-        # Cuentas necesarias
+        # Cuentas necesarias (TODOS LOS SALDOS USAN 'saldo=')
         self.cuenta1 = Cuenta.objects.create(
             usuario=self.user, nombre='Caja', tipo='EFECTIVO', saldo=Decimal('500.00')
         )
