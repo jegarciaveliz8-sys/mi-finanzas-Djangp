@@ -10,7 +10,7 @@
         <form method="post">
             {% csrf_token %}
             
-            {{ form.as_p }}
+            {{ transaccion_form.as_p }}
             
             <button type="submit" class="btn btn-primary mt-3">Guardar Cambios</button>
             <a href="{% url 'mi_finanzas:transacciones_lista' %}" class="btn btn-secondary mt-3">Cancelar</a>
