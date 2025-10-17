@@ -50,7 +50,7 @@ class Cuenta(models.Model):
     nombre = models.CharField(max_length=100)
     tipo = models.CharField(max_length=15, choices=TIPOS_CUENTA) 
     # El campo de saldo es 'saldo', NO 'balance'.
-    saldo = models.DecimalField(max_digits=15, decimal_places=2, default=0.00) 
+    saldo = models.DecimalField(max_digits=15, decimal_places=2, default=Decimal('0.00')) 
 
     class Meta:
         unique_together = ('usuario', 'nombre')
@@ -86,6 +86,7 @@ class Categoria(models.Model):
 class Transaccion(models.Model):
     usuario = models.ForeignKey(User, on_delete=models.CASCADE)
     cuenta = models.ForeignKey(Cuenta, on_delete=models.CASCADE) 
+    # NOTA: El monto DEBE guardarse como POSITIVO (valor absoluto).
     monto = models.DecimalField(max_digits=15, decimal_places=2)
     tipo = models.CharField(max_length=7, choices=TIPO_INGRESO_EGRESO) 
     
@@ -113,46 +114,64 @@ class Transaccion(models.Model):
         return f"{self.tipo} de {self.monto} en {self.cuenta.nombre}"
 
     # ------------------------------------------------------------------
-    # LÓGICA CRÍTICA DE MANTENIMIENTO DE SALDO (Save)
+    # NUEVA LÓGICA DE NEGOCIO: Monto con Signo
+    # ------------------------------------------------------------------
+
+    def _get_monto_ajustado(self, monto: Decimal, tipo: str) -> Decimal:
+        """Devuelve el monto con el signo correcto: positivo para INGRESO, negativo para EGRESO."""
+        if tipo == 'EGRESO':
+            return -monto
+        return monto
+    
+    # ------------------------------------------------------------------
+    # LÓGICA CRÍTICA DE MANTENIMIENTO DE SALDO (Save) - CORREGIDA
     # ------------------------------------------------------------------
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
-        old_monto = Decimal('0.00')
+        
+        # Montos y cuenta anteriores
+        old_signed_monto = Decimal('0.00') # Monto anterior, ya con signo
         old_cuenta = None
+        old_tipo = None
 
         if not is_new:
             try:
-                # Obtener el estado anterior de la transacción de la base de datos
-                # Se usa .select_related('cuenta') para optimizar si la cuenta es diferente
+                # Recuperar el estado de la transacción antes de la edición
                 old_transaccion = Transaccion.objects.select_related('cuenta').get(pk=self.pk)
-                old_monto = old_transaccion.monto
                 old_cuenta = old_transaccion.cuenta
+                old_tipo = old_transaccion.tipo
+                
+                # Calcular el monto anterior con signo usando la nueva función auxiliar
+                old_signed_monto = self._get_monto_ajustado(old_transaccion.monto, old_tipo)
+
             except Transaccion.DoesNotExist:
-                # Esto no debería ocurrir si is_new es False, pero es un buen manejo de errores
                 pass 
 
         # 1. Llamar al save original para guardar la nueva transacción/modificación
         super().save(*args, **kwargs)
 
-        # 2. Lógica de ajuste de saldos
+        # 2. Calcular el monto actual con signo
+        # Esto asume que self.monto es un valor positivo (absoluto)
+        current_signed_monto = self._get_monto_ajustado(self.monto, self.tipo)
         
-        # Si la cuenta cambió (edición de cuenta):
+        # 3. Lógica de ajuste de saldos
+
+        # a. Si la cuenta fue cambiada (edición de cuenta):
         if old_cuenta and old_cuenta != self.cuenta:
-            # Revertir el impacto del monto anterior en la cuenta antigua
-            # IMPORTANTE: Asume que el monto anterior tiene el signo correcto (positivo o negativo)
-            old_cuenta.saldo -= old_monto
+            # Revertir el impacto del monto anterior en la cuenta antigua (suma el inverso del monto con signo)
+            old_cuenta.saldo -= old_signed_monto 
             old_cuenta.save()
+            
+        # b. Ajustar la cuenta actual (sea nueva, editada, o cuenta cambiada):
         
-        # En la cuenta actual (sea nueva, editada, o cambiada):
-        # Primero, revertir el monto antiguo (si era nueva, old_monto es 0.00)
-        self.cuenta.saldo -= old_monto 
+        # Revertir el impacto del monto anterior (si era nueva, old_signed_monto es 0.00)
+        self.cuenta.saldo -= old_signed_monto 
         
-        # Luego, aplicar el nuevo monto. 
-        # NOTA CLAVE: Esto funciona SOLO si los egresos se guardan como números NEGATIVOS.
-        self.cuenta.saldo += self.monto
+        # Aplicar el nuevo monto. Si es INGRESO suma, si es EGRESO resta.
+        self.cuenta.saldo += current_signed_monto 
         
-        # Guardar la cuenta (esto cubre los casos de nueva, edición de monto, y edición de cuenta)
+        # Guardar la cuenta 
         self.cuenta.save()
 
     # Se mantiene la decisión de no incluir el método delete() y manejar la reversión en la vista.
@@ -183,7 +202,9 @@ class TransaccionRecurrente(models.Model):
     def calcular_siguiente_fecha(self):
         # Implementación simple, usar dateutil.relativedelta para precisión
         if self.frecuencia == 'MENSUAL':
-            return self.proximo_pago + timedelta(days=30)
+            # Nota: Usar timedelta(days=30) es una aproximación,
+            # para mayor precisión mensual se recomienda python-dateutil.
+            return self.proximo_pago + timedelta(days=30) 
         elif self.frecuencia == 'SEMANAL':
             return self.proximo_pago + timedelta(days=7)
         else:
@@ -202,7 +223,7 @@ class Presupuesto(models.Model):
     monto_limite = models.DecimalField(
         max_digits=10, 
         decimal_places=2,
-        validators=[MinValueValidator(0.01)],
+        validators=[MinValueValidator(Decimal('0.01'))], # Uso de Decimal para MinValueValidator
         help_text="Monto máximo que deseas gastar en esta categoría."
     )
     
