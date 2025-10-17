@@ -3,6 +3,7 @@ from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator 
 from django.utils import timezone
 from datetime import timedelta 
+from decimal import Decimal # Necesario para asegurar el tipo en lógica de save (aunque no se use directamente, es buena práctica)
 
 User = get_user_model() 
 
@@ -78,7 +79,7 @@ class Categoria(models.Model):
         return f"[{self.get_tipo_display()}] {self.nombre}"
 
 # ========================================================
-# --- 3. MODELO TRANSACCION (Refinado) ---
+# --- 3. MODELO TRANSACCION (Lógica de Actualización de Saldo Añadida) ---
 # ========================================================
 
 class Transaccion(models.Model):
@@ -94,10 +95,8 @@ class Transaccion(models.Model):
     fecha_creacion = models.DateTimeField(auto_now_add=True)
     
     # 🌟 REFINAMIENTO AÑADIDO para robustez y filtrado 🌟
-    # Campo para identificar transacciones que son transferencias entre cuentas
     es_transferencia = models.BooleanField(default=False) 
     
-    # Campo para enlazar la transacción de egreso con su ingreso par, y viceversa
     transaccion_relacionada = models.ForeignKey(
         'self', 
         on_delete=models.SET_NULL, 
@@ -113,8 +112,62 @@ class Transaccion(models.Model):
     def __str__(self):
         return f"{self.tipo} de {self.monto} en {self.cuenta.nombre}"
 
+    # ------------------------------------------------------------------
+    # 💡 LÓGICA CRÍTICA DE MANTENIMIENTO DE SALDO 💡
+    # ------------------------------------------------------------------
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        old_monto = Decimal('0.00')
+        old_cuenta = None
+
+        if not is_new:
+            try:
+                # Obtener el estado anterior de la transacción de la base de datos
+                old_transaccion = Transaccion.objects.get(pk=self.pk)
+                old_monto = old_transaccion.monto
+                old_cuenta = old_transaccion.cuenta
+            except Transaccion.DoesNotExist:
+                pass # Esto no debería ocurrir si pk existe, pero lo manejamos
+
+        # 1. Llamar al save original para guardar la nueva transacción/modificación
+        super().save(*args, **kwargs)
+
+        # 2. Lógica de ajuste de saldos
+        
+        # Si la cuenta cambió (edición de cuenta):
+        if old_cuenta and old_cuenta != self.cuenta:
+            # Revertir el monto anterior en la cuenta antigua
+            old_cuenta.saldo -= old_monto
+            old_cuenta.save()
+            
+            # Aplicar el nuevo monto a la nueva cuenta (se manejará en el siguiente if)
+            
+        # Si la cuenta no cambió O si es una nueva transacción O si la cuenta cambió:
+        # Se revierte el monto antiguo del saldo (o 0 si es nueva)
+        self.cuenta.saldo -= old_monto 
+        
+        # Se aplica el nuevo monto al saldo
+        self.cuenta.saldo += self.monto
+        
+        # Guardar la cuenta (esto cubre los casos de nueva, edición de monto, y edición de cuenta)
+        self.cuenta.save()
+
+
+    def delete(self, *args, **kwargs):
+        # 1. Revertir el efecto de la transacción en la cuenta asociada
+        # Si monto es -100 (egreso), hacer -= (-100) es +100 (suma el dinero de vuelta).
+        # Si monto es +500 (ingreso), hacer -= 500 (resta el dinero).
+        self.cuenta.saldo -= self.monto
+        self.cuenta.save()
+        
+        # 2. Llamar al delete original
+        super().delete(*args, **kwargs)
+
+
 # ========================================================
 # --- 4. MODELO TRANSACCION RECURRENTE ---
+# ... (El resto del código de los otros modelos permanece igual)
 # ========================================================
 
 class TransaccionRecurrente(models.Model):
@@ -142,7 +195,7 @@ class TransaccionRecurrente(models.Model):
         elif self.frecuencia == 'SEMANAL':
             return self.proximo_pago + timedelta(days=7)
         else:
-             return self.proximo_pago + timedelta(days=1)
+            return self.proximo_pago + timedelta(days=1)
 
 # ========================================================
 # --- 5. MODELO PRESUPUESTO ---
