@@ -78,12 +78,13 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // 1. Preparar datos para el gráfico
-    // Los datos del QuerySet están en la variable 'gastos_por_categoria'
+    // CORRECCIÓN CLAVE: Usamos la variable JSON serializada que viene de views.py
+    const gastosData = JSON.parse('{{ gastos_por_categoria_json|safe|escapejs }}');
     
-    // Convertir el QuerySet a formato JSON (se necesita en la vista o en una API, 
-    // pero para este ejemplo, convertiremos el objeto Python a arrays JS)
-    
-    const gastosData = JSON.parse('{{ gastos_por_categoria|safe|escapejs }}');
+    // Si no hay datos, salimos de la función para no intentar crear un gráfico vacío.
+    if (gastosData.length === 0) {
+        return; 
+    }
     
     const labels = gastosData.map(item => item.categoria__nombre || 'Sin Categoría');
     const data = gastosData.map(item => parseFloat(item.total));
@@ -121,3 +122,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock extra_js %}
+
