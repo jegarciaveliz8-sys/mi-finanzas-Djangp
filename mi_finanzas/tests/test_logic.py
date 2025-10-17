@@ -7,7 +7,6 @@ from django.db import transaction
 
 # --- IMPORTACIONES CONSOLIDADAS ---
 from mi_finanzas.models import Cuenta, Transaccion, Categoria, Presupuesto 
-from mi_finanzas.forms import TransaccionForm
 
 # Importaciones necesarias para cálculos en tests
 from django.db.models import Sum, Q, DecimalField 
@@ -63,7 +62,7 @@ class FinanzasLogicTestCase(TestCase):
          
         # 4. Crear transacciones iniciales (Estas ya actualizan el saldo)
         # Ingreso (+2000)
-        self.tx_ingreso_inicial = Transaccion.objects.create(
+        Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_principal,
             monto=Decimal('2000.00'),
@@ -73,7 +72,7 @@ class FinanzasLogicTestCase(TestCase):
             descripcion='Pago de nómina inicial'
         )
         # Egreso (-500)
-        self.tx_egreso_inicial = Transaccion.objects.create(
+        Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_principal,
             monto=Decimal('500.00'),
@@ -140,7 +139,6 @@ class FinanzasLogicTestCase(TestCase):
             cuenta_destino.save()
 
             # 2. Crear las transacciones (sin que modifiquen el saldo en el modelo)
-            # Creamos la transferencia marcándola como tal y enlazándola
             tx_origen = Transaccion.objects.create(
                 usuario=self.user, 
                 cuenta=cuenta_origen, 
@@ -241,17 +239,12 @@ class FinanzasLogicTestCase(TestCase):
         self.assertEqual(self.cuenta_principal.saldo, Decimal('2200.00')) # 2500 - 300
         self.assertEqual(self.cuenta_ahorros.saldo, Decimal('5300.00')) # 5000 + 300
          
-        # 2. Eliminar la transacción de origen (Debe eliminar el par y revertir ambos saldos)
+        # 2. Eliminar las transacciones de forma atómica para revertir saldos
         with transaction.atomic():
-            # Se revierte el saldo de la cuenta de origen: 2200 + 300 = 2500
-            tx_origen.delete() 
+            # 🔔 CRÍTICO: Eliminamos ambas transacciones explícitamente para asegurar la reversión del saldo.
+            tx_origen.delete() # Revertir saldo en cuenta_principal (2200 + 300 = 2500)
+            tx_destino.delete() # Revertir saldo en cuenta_ahorros (5300 - 300 = 5000)
             
-            # Se revierte el saldo de la cuenta de destino: 5300 - 300 = 5000
-            try:
-                tx_destino.delete()
-            except Transaccion.DoesNotExist:
-                pass 
-
         # 3. Verificar saldos finales (Deben volver a los iniciales)
         self.cuenta_principal.refresh_from_db()
         self.cuenta_ahorros.refresh_from_db()
@@ -295,7 +288,7 @@ class VistasIntegracionTestCase(TestCase):
         self.url_anadir_transaccion = reverse('mi_finanzas:anadir_transaccion')
          
         # Crear una transacción simple para el test de eliminación de CRUD (PK=1)
-        self.tx_simple_crud = Transaccion.objects.create(
+        Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta2,
             monto=Decimal('50.00'),
@@ -317,7 +310,8 @@ class VistasIntegracionTestCase(TestCase):
         self.cuenta1.refresh_from_db() 
         self.cuenta2.refresh_from_db() 
 
-        # Ahora el PK para eliminar es el de la transacción de prueba
+        # Obtener la PK de la transaccion de prueba despues de asegurar los saldos
+        self.tx_simple_crud = Transaccion.objects.get(descripcion='Transaccion de prueba para eliminar')
         self.url_eliminar_transaccion = reverse('mi_finanzas:eliminar_transaccion', args=[self.tx_simple_crud.pk])
 
 
