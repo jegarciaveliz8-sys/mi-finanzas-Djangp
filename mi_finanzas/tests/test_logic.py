@@ -334,3 +334,104 @@ class VistasIntegracionTestCase(TestCase):
         
         # 4. Verificar que la transacción fue eliminada
         self.assertEqual(Transaccion.objects.filter(pk=tx_luz.pk).count(), 0)
+
+
+
+# D. PRUEBAS DE PRESUPUESTOS
+# --------------------------------------------------------
+
+    def test_calculo_gasto_presupuesto(self):
+        """Asegura que el Presupuesto calcula correctamente el gasto acumulado 
+        excluyendo transacciones que no son EGRESO o son transferencias."""
+        
+        # 1. Crear una nueva categoría específica para el presupuesto
+        cat_viajes = Categoria.objects.create(
+            usuario=self.user,
+            nombre='Viajes',
+            tipo='EGRESO'
+        )
+        
+        # 2. Crear el Presupuesto para esa categoría
+        presupuesto_viajes = Presupuesto.objects.create(
+            usuario=self.user,
+            categoria=cat_viajes,
+            monto_limite=Decimal('1000.00'),
+            periodo='MENSUAL'
+        )
+        
+        # 3. Crear Transacciones de EGRESO que DEBEN contarse (Gasto Real)
+        # Gasto 1: 300.00
+        Transaccion.objects.create(
+            usuario=self.user,
+            cuenta=self.cuenta_principal,
+            monto=Decimal('-300.00'),
+            tipo='EGRESO',
+            categoria=cat_viajes,
+            fecha=date.today(),
+            descripcion='Vuelo a Paris'
+        )
+        # Gasto 2: 150.00
+        Transaccion.objects.create(
+            usuario=self.user,
+            cuenta=self.cuenta_principal,
+            monto=Decimal('-150.00'),
+            tipo='EGRESO',
+            categoria=cat_viajes,
+            fecha=date.today(),
+            descripcion='Noche de hotel'
+        )
+        
+        # 4. Crear Transacciones que NO DEBEN contarse:
+        
+        # A. Transferencia (es_transferencia=True) - Debe ser ignorada
+        Transaccion.objects.create(
+            usuario=self.user,
+            cuenta=self.cuenta_principal,
+            monto=Decimal('-200.00'),
+            tipo='EGRESO',
+            categoria=cat_viajes,
+            fecha=date.today(),
+            es_transferencia=True,
+            descripcion='Transferencia interna'
+        )
+        
+        # B. Ingreso (tipo='INGRESO') - Debe ser ignorada
+        Transaccion.objects.create(
+            usuario=self.user,
+            cuenta=self.cuenta_principal,
+            monto=Decimal('50.00'),
+            tipo='INGRESO',
+            categoria=cat_viajes,
+            fecha=date.today(),
+            descripcion='Reembolso de viaje'
+        )
+        
+        # 5. Lógica de cálculo (similar a la que usarías en un método del modelo/manager)
+        
+        # Filtrar solo Egresos, no transferencias, de la categoría y período del presupuesto
+        gasto_acumulado = Transaccion.objects.filter(
+            usuario=self.user,
+            categoria=presupuesto_viajes.categoria,
+            tipo='EGRESO', # Solo egresos
+            es_transferencia=False, # Excluir transferencias
+            fecha__year=date.today().year,
+            fecha__month=date.today().month # Asumiendo un periodo MENSUAL simple
+        ).aggregate(
+            total_gastado=Coalesce(Sum('monto'), Decimal(0))
+        )['total_gastado']
+        
+        # El gasto debe ser: -300.00 + -150.00 = -450.00
+        self.assertEqual(gasto_acumulado, Decimal('-450.00'))
+        
+        # Opcionalmente, verificar el porcentaje de ejecución
+        porcentaje_ejecucion = (abs(gasto_acumulado) / presupuesto_viajes.monto_limite) * 100
+        self.assertEqual(porcentaje_ejecucion, Decimal('45.00'))
+        
+        # Comprobar que el saldo total neto de las cuentas NO cambia por esta prueba (buena práctica)
+        cuentas = Cuenta.objects.filter(usuario=self.user)
+        saldo_neto_final = cuentas.aggregate(
+            total=Coalesce(Sum('saldo'), Decimal(0), output_field=DecimalField())
+        )['total']
+        # Saldo inicial: 7300.00. La nueva transferencia y los ingresos/gastos reales modifican el saldo.
+        # 7300 (inicial) - 300 - 150 - 200 + 50 = 6700.00
+        self.assertEqual(saldo_neto_final, Decimal('6700.00'))
