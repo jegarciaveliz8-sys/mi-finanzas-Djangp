@@ -16,17 +16,16 @@ urlpatterns = [
     # =========================================================
     # 2. Rutas de Vistas Principales (Dashboard y Listados)
     # =========================================================
-    # Nota: Se mantiene 'resumen_financiero' para ambas rutas, pero es recomendable usar un solo nombre para evitar ambigüedades.
+    # Vista principal, la raíz de la app (ej: /mi_finanzas/)
     path('', views.resumen_financiero, name='resumen_financiero'),
-    path('resumen/', views.resumen_financiero, name='resumen_financiero'), 
     
     # Vista de Cuentas (CLASE)
     path('cuentas/', views.CuentasListView.as_view(), name='cuentas_lista'),
     
-    # Vista de Transacciones (CLASE)
+    # Vista de Historial de Transacciones (CLASE)
     path('transacciones/lista/', views.TransaccionesListView.as_view(), name='transacciones_lista'), 
     
-    # RUTA DEL MANUAL
+    # RUTA DEL MANUAL (Si existe)
     path('manual/', TemplateView.as_view(template_name='manual_html/index.html'), name='manual_page'),
     
     # =========================================================
@@ -43,8 +42,7 @@ urlpatterns = [
     path('transacciones/<int:pk>/editar/', views.editar_transaccion, name='editar_transaccion'),
     path('transacciones/<int:pk>/eliminar/', views.eliminar_transaccion, name='eliminar_transaccion'),
     
-    # RUTA DE TRANSFERENCIA (¡CORREGIDA!)
-    # El 'name' ahora es 'transferencia' para que coincida con el modal de resumen_financiero.html
+    # RUTA DE TRANSFERENCIA
     path('transferir/', views.transferir_monto, name='transferencia'), 
 
     # =========================================================
@@ -62,3 +60,4 @@ urlpatterns = [
     # =========================================================
     path('reportes/', views.reportes_financieros, name='reportes_financieros'),
 ]
+
