@@ -59,8 +59,7 @@ class FinanzasLogicTestCase(TestCase):
             tipo='EGRESO'
         )
 
-        # 4. Crear transacciones iniciales (Fecha de hoy para el mes actual)
-        # ESTAS TRANSACCIONES YA EJECUTAN LA LÓGICA DE save() EN MODELS.PY
+        # 4. Crear transacciones iniciales (Estas ya actualizan el saldo)
         Transaccion.objects.create(
             usuario=self.user,
             cuenta=self.cuenta_principal,
@@ -86,14 +85,12 @@ class FinanzasLogicTestCase(TestCase):
 
     def test_saldo_total_neto(self):
         """Asegura que el Saldo Total Neto se calcula correctamente (Activos - Pasivos)."""
-        
-        # 💡 CORRECCIÓN: El saldo esperado debe ser 7300.00
-        # 1000 (Principal Inicial) + 2000 (Nómina) - 500 (Super) + 5000 (Ahorros) - 200 (Tarjeta) = 7300.00
+        # Saldo esperado después de setUp: 1000 + 2000 - 500 + 5000 - 200 = 7300.00
         cuentas = Cuenta.objects.filter(usuario=self.user)
         saldo_neto = cuentas.aggregate(
             total=Coalesce(Sum('saldo'), Decimal(0), output_field=DecimalField())
         )['total']
-        self.assertEqual(saldo_neto, Decimal('7300.00')) # <-- CORREGIDO
+        self.assertEqual(saldo_neto, Decimal('7300.00'))
 
     def test_transaccion_ajusta_saldo(self):
         """Asegura que una nueva transacción ajuste correctamente el saldo de la cuenta."""
@@ -119,7 +116,6 @@ class FinanzasLogicTestCase(TestCase):
         monto_transfer = Decimal('100.00')
         
         # 1. Simular la transferencia de la función transferir_monto
-        # Estas dos llamadas a create() ya ejecutaron la lógica de save() y actualizaron los saldos.
         tx_origen = Transaccion.objects.create(
             usuario=self.user, 
             cuenta=self.cuenta_principal, 
@@ -137,8 +133,7 @@ class FinanzasLogicTestCase(TestCase):
             es_transferencia=True
         )
         
-        # 💡 CORRECCIÓN: Usar update() para enlazar las transacciones SIN llamar
-        # nuevamente al método save() del modelo, evitando recursión y errores.
+        # Usar update() para enlazar las transacciones SIN llamar de nuevo al save()
         Transaccion.objects.filter(pk=tx_origen.pk).update(transaccion_relacionada=tx_destino)
         Transaccion.objects.filter(pk=tx_destino.pk).update(transaccion_relacionada=tx_origen)
 
@@ -162,7 +157,7 @@ class FinanzasLogicTestCase(TestCase):
             tipo='INGRESO', 
             monto=Decimal('500.00'),
             fecha=date.today(),
-            es_transferencia=True # <-- MARCADA COMO TRANSFERENCIA
+            es_transferencia=True 
         )
         Transaccion.objects.create(
             usuario=self.user, 
@@ -170,7 +165,7 @@ class FinanzasLogicTestCase(TestCase):
             tipo='EGRESO', 
             monto=Decimal('-500.00'),
             fecha=date.today(),
-            es_transferencia=True # <-- MARCADA COMO TRANSFERENCIA
+            es_transferencia=True 
         )
         
         # Crear un Ingreso y Gasto REALES del mes
@@ -191,10 +186,10 @@ class FinanzasLogicTestCase(TestCase):
             es_transferencia=False
         )
         
-        # Obtener transacciones del mes sin transferencias (simulando resumen_financiero)
+        # Obtener transacciones del mes sin transferencias
         transacciones_sin_transfer = Transaccion.objects.filter(
             usuario=self.user,
-            es_transferencia=False, # <-- ¡EL FILTRO DE ROBUSTEZ!
+            es_transferencia=False,
             fecha__month=date.today().month
         )
         
@@ -235,10 +230,11 @@ class VistasIntegracionTestCase(TestCase):
             usuario=self.user, nombre='Servicios', tipo='EGRESO'
         )
         
+        # URLs
         self.url_resumen = reverse('mi_finanzas:resumen_financiero')
         self.url_transferencia = reverse('mi_finanzas:transferir_monto')
         self.url_anadir_transaccion = reverse('mi_finanzas:anadir_transaccion')
-        # El arg=[1] puede ser problemático si no hay transacciones, pero lo dejamos por ahora.
+        # Buscamos la URL para eliminar la primera Transaccion creada en el test, cuyo PK será 1
         self.url_eliminar_transaccion = reverse('mi_finanzas:eliminar_transaccion', args=[1])
 
 
@@ -305,7 +301,8 @@ class VistasIntegracionTestCase(TestCase):
         data_create = {
             'cuenta': self.cuenta2.pk,
             'tipo': 'EGRESO',
-            'monto': Decimal('-150.00'),
+            # 💡 CORREGIDO: Usar monto positivo, la vista debe aplicar el signo negativo.
+            'monto': Decimal('150.00'), 
             'categoria': self.cat_gasto.pk,
             'fecha': date.today(),
             'descripcion': 'Pago de luz'
@@ -320,20 +317,20 @@ class VistasIntegracionTestCase(TestCase):
         # --- 2. EDICIÓN ---
         url_editar = reverse('mi_finanzas:editar_transaccion', args=[tx_luz.pk])
         data_edit = data_create.copy()
-        data_edit['monto'] = Decimal('-100.00') # Nuevo monto
+        # 💡 CORREGIDO: Usar monto positivo en la edición.
+        data_edit['monto'] = Decimal('100.00') # Nuevo monto
         
         self.client.post(url_editar, data_edit, follow=True)
         self.cuenta2.refresh_from_db()
-        # Lógica de edición: 850 - (-150) + (-100) = 900.00
+        # Saldo esperado: 850 (antes) - (-150) (revertir viejo) + (-100) (aplicar nuevo) = 900.00
         self.assertEqual(self.cuenta2.saldo, Decimal('900.00'))
         
         # --- 3. ELIMINACIÓN ---
         url_eliminar = reverse('mi_finanzas:eliminar_transaccion', args=[tx_luz.pk])
         self.client.post(url_eliminar, follow=True)
         self.cuenta2.refresh_from_db()
-        # Lógica de eliminación: 900 - (-100) = 1000.00
+        # Lógica de eliminación: 900 - (-100) = 1000.00 (Vuelve al saldo original de la cuenta)
         self.assertEqual(self.cuenta2.saldo, Decimal('1000.00'))
         
         # 4. Verificar que la transacción fue eliminada
         self.assertEqual(Transaccion.objects.filter(pk=tx_luz.pk).count(), 0)
-
