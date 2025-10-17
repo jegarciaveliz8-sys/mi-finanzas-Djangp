@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from django.core.validators import MinValueValidator 
 from django.utils import timezone
 from datetime import timedelta 
-from decimal import Decimal # Necesario para asegurar el tipo en lógica de save (aunque no se use directamente, es buena práctica)
+from decimal import Decimal 
 
 User = get_user_model() 
 
@@ -113,7 +113,7 @@ class Transaccion(models.Model):
         return f"{self.tipo} de {self.monto} en {self.cuenta.nombre}"
 
     # ------------------------------------------------------------------
-    # 💡 LÓGICA CRÍTICA DE MANTENIMIENTO DE SALDO 💡
+    # 💡 LÓGICA CRÍTICA DE MANTENIMIENTO DE SALDO (Save) 💡
     # ------------------------------------------------------------------
 
     def save(self, *args, **kwargs):
@@ -128,7 +128,7 @@ class Transaccion(models.Model):
                 old_monto = old_transaccion.monto
                 old_cuenta = old_transaccion.cuenta
             except Transaccion.DoesNotExist:
-                pass # Esto no debería ocurrir si pk existe, pero lo manejamos
+                pass 
 
         # 1. Llamar al save original para guardar la nueva transacción/modificación
         super().save(*args, **kwargs)
@@ -140,9 +140,7 @@ class Transaccion(models.Model):
             # Revertir el monto anterior en la cuenta antigua
             old_cuenta.saldo -= old_monto
             old_cuenta.save()
-            
-            # Aplicar el nuevo monto a la nueva cuenta (se manejará en el siguiente if)
-            
+        
         # Si la cuenta no cambió O si es una nueva transacción O si la cuenta cambió:
         # Se revierte el monto antiguo del saldo (o 0 si es nueva)
         self.cuenta.saldo -= old_monto 
@@ -153,21 +151,13 @@ class Transaccion(models.Model):
         # Guardar la cuenta (esto cubre los casos de nueva, edición de monto, y edición de cuenta)
         self.cuenta.save()
 
-
-    def delete(self, *args, **kwargs):
-        # 1. Revertir el efecto de la transacción en la cuenta asociada
-        # Si monto es -100 (egreso), hacer -= (-100) es +100 (suma el dinero de vuelta).
-        # Si monto es +500 (ingreso), hacer -= 500 (resta el dinero).
-        self.cuenta.saldo -= self.monto
-        self.cuenta.save()
-        
-        # 2. Llamar al delete original
-        super().delete(*args, **kwargs)
+    # ❌ ELIMINACIÓN DEL MÉTODO delete() ❌
+    # La lógica de ajuste de saldo para la eliminación se maneja ahora
+    # EXCLUSIVAMENTE en la vista `eliminar_transaccion` para evitar la doble reversión.
 
 
 # ========================================================
 # --- 4. MODELO TRANSACCION RECURRENTE ---
-# ... (El resto del código de los otros modelos permanece igual)
 # ========================================================
 
 class TransaccionRecurrente(models.Model):
