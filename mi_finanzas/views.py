@@ -538,3 +538,63 @@ def reportes_financieros(request):
     
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
 
+
+
+
+from django.db.models.functions import Coalesce
+from datetime import date
+from dateutil.relativedelta import relativedelta
+from django.db.models import Sum, DecimalField, Q 
+from decimal import Decimal
+from django.contrib.auth.decorators import login_required
+# Importa tu modelo Transaccion, y el formulario TransferenciaForm si es necesario
+
+@login_required
+def reportes_financieros(request):
+    """Genera reportes financieros agregando datos por los últimos 6 meses completos."""
+    
+    # PASO 1: Determinar el rango de los últimos 6 meses completos
+    hoy = date.today()
+    
+    # Retrocede 5 meses para llegar al sexto mes (ej: Oct -> Mayo)
+    fecha_6_meses_atras = hoy - relativedelta(months=5) 
+    
+    # Establece la fecha de inicio al primer día del mes de ese sexto mes (ej: 01 de Mayo)
+    fecha_inicio = fecha_6_meses_atras.replace(day=1) 
+    
+    # PASO 2: Filtrar todas las transacciones dentro de ese rango
+    transacciones = Transaccion.objects.filter(
+        usuario=request.user, 
+        fecha__gte=fecha_inicio
+    )
+    
+    # PASO 3: Agregación Total de Ingresos y Egresos en el rango de 6 meses
+    totales = transacciones.aggregate(
+        # Suma todos los montos positivos (Ingresos)
+        ingresos=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0), output_field=DecimalField()),
+        
+        # Suma todos los montos negativos (Egresos) y los multiplica por -1 para hacerlos POSITIVOS
+        egresos_abs=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0), output_field=DecimalField()) * -1
+    )
+
+    # PASO 4: Agregación Mensual para Gráficos de Tendencias (Egresos y Ingresos por mes)
+    flujo_mensual = transacciones.values('fecha__year', 'fecha__month').annotate(
+        ingresos_mes=Coalesce(Sum('monto', filter=Q(monto__gt=0)), Decimal(0)),
+        
+        # Egresos como valor positivo por mes
+        egresos_mes=Coalesce(Sum('monto', filter=Q(monto__lt=0)), Decimal(0)) * -1
+    ).order_by('fecha__year', 'fecha__month')
+    
+    # PASO 5: Preparar el contexto para la plantilla
+    context = {
+        'transacciones': transacciones.order_by('-fecha'), # Lista de transacciones para el reporte
+        'totales': totales,                               # Totales de Ingresos/Egresos
+        'flujo_mensual': flujo_mensual,                   # Desglose de tendencias mensuales
+        'fecha_inicio': fecha_inicio,
+        'fecha_fin': hoy,
+        # Si tienes un formulario modal en la página de reportes:
+        # 'form': TransferenciaForm(user=request.user), 
+    }
+    
+    return render(request, 'mi_finanzas/reportes_financieros.html', context)
+
