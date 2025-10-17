@@ -203,7 +203,8 @@ def transferir_monto(request):
                 messages.error(request, 'Saldo insuficiente en la cuenta de origen.')
                 return redirect('mi_finanzas:resumen_financiero')
 
-            # Actualizar saldos
+            # Actualizar saldos (ESTO ES NECESARIO AQUÍ YA QUE ESTAMOS SALTÁNDONOS EL .save() DEL MODELO
+            # PARA EVITAR RECURSIÓN Y DUPLICACIÓN DE TRANSACCIONES)
             cuenta_origen.saldo -= monto
             cuenta_destino.saldo += monto
             
@@ -217,7 +218,8 @@ def transferir_monto(request):
                 usuario=request.user, 
                 cuenta=cuenta_origen, 
                 tipo='EGRESO', 
-                monto=-monto,
+                # El monto es negativo porque ya se actualizó el saldo arriba.
+                monto=-monto, 
                 descripcion=f"Transferencia Enviada a {cuenta_destino.nombre} ({descripcion})",
                 fecha=fecha,
                 es_transferencia=True # <-- ¡CRÍTICO!
@@ -233,10 +235,15 @@ def transferir_monto(request):
                 es_transferencia=True # <-- ¡CRÍTICO!
             )
             
-            # 3. Enlazar las transacciones para una posible reversión/edición más fácil
+            # 3. Enlazar las transacciones (usamos update() en el test, pero save() está bien aquí
+            # siempre y cuando el save() del modelo sepa que no debe tocar el saldo nuevamente)
             tx_origen.transaccion_relacionada = tx_destino
             tx_destino.transaccion_relacionada = tx_origen
-            tx_origen.save()
+            
+            # 🚨 IMPORTANTE: Asegúrate de que el método save() del modelo Transaccion
+            # sea robusto y maneje correctamente que estas transacciones ya se reflejaron
+            # en el saldo de la cuenta antes de su creación.
+            tx_origen.save() 
             tx_destino.save()
             
             # ----------------------------------------------------------------------
@@ -254,7 +261,7 @@ def transferir_monto(request):
     return redirect('mi_finanzas:resumen_financiero')
 
 # ========================================================
-# VISTAS DE CUENTAS (CRUD) (No requieren cambios de refinamiento)
+# VISTAS DE CUENTAS (CRUD)
 # ========================================================
 
 @login_required
@@ -328,7 +335,7 @@ def eliminar_cuenta(request, pk):
     return render(request, 'mi_finanzas/eliminar_cuenta_confirm.html', {'cuenta': cuenta}) 
 
 # ========================================================
-# VISTAS DE TRANSACCIONES (CRUD) (No requieren cambios de refinamiento)
+# VISTAS DE TRANSACCIONES (CRUD)
 # ========================================================
 
 @login_required
@@ -336,18 +343,23 @@ def eliminar_cuenta(request, pk):
 def anadir_transaccion(request):
     """Vista para añadir una nueva transacción."""
     if request.method == 'POST':
-        # Instancia el Formulario de Transacción con la data POST y el user
         form = TransaccionForm(request.POST, user=request.user) 
         if form.is_valid():
             transaccion = form.save(commit=False)
             transaccion.usuario = request.user
             
-            # Ajustar saldo de la cuenta antes de guardar
-            cuenta = transaccion.cuenta
-            cuenta.saldo += transaccion.monto # Si es egreso, monto es negativo, por lo que resta
-            cuenta.save()
+            # 💡 CORRECCIÓN CRÍTICA: Aplicar el signo al monto si es un egreso.
+            # Asumimos que el form devuelve un monto positivo para Egresos/Ingresos
+            if transaccion.tipo == 'EGRESO' and transaccion.monto > 0:
+                transaccion.monto = -transaccion.monto
             
-            transaccion.save()
+            # ❌ ELIMINAMOS LA LÓGICA DE ACTUALIZACIÓN DE SALDO DE LA VISTA
+            # La delegamos al método save() del modelo Transaccion para evitar duplicación.
+            # cuenta = transaccion.cuenta
+            # cuenta.saldo += transaccion.monto
+            # cuenta.save()
+            
+            transaccion.save() # <-- ESTO DEBE CONTENER LA LÓGICA DE AJUSTE DE SALDO
             messages.success(request, "¡Transacción añadida con éxito!")
             return redirect('mi_finanzas:transacciones_lista')
         else:
@@ -372,8 +384,8 @@ def anadir_transaccion(request):
 def editar_transaccion(request, pk):
     """Vista para editar una transacción existente."""
     transaccion_antigua = get_object_or_404(Transaccion, pk=pk, usuario=request.user)
-    monto_original = transaccion_antigua.monto
     
+    # Si la transacción es una transferencia, no permitir la edición directa
     if transaccion_antigua.es_transferencia:
         messages.error(request, "Las transacciones de transferencia no pueden editarse directamente. Elimina y vuelve a crear la transferencia completa.")
         return redirect('mi_finanzas:transacciones_lista')
@@ -384,20 +396,20 @@ def editar_transaccion(request, pk):
         
         if form.is_valid():
             transaccion_nueva = form.save(commit=False)
-            monto_nuevo = transaccion_nueva.monto
             
-            # Lógica de ajuste de saldos (CRÍTICA)
-            cuenta = transaccion_antigua.cuenta
+            # 💡 CORRECCIÓN CRÍTICA: Aplicar el signo al monto si es un egreso.
+            if transaccion_nueva.tipo == 'EGRESO' and transaccion_nueva.monto > 0:
+                transaccion_nueva.monto = -transaccion_nueva.monto
             
-            # 1. Deshacer el impacto del monto original
-            cuenta.saldo -= monto_original
+            # ❌ ELIMINAMOS LA LÓGICA DE AJUSTE DE SALDO DE LA VISTA
+            # La delegamos al método save() del modelo Transaccion
+            # monto_original = transaccion_antigua.monto # Ahora esto se gestiona en save() del modelo
+            # cuenta = transaccion_antigua.cuenta
             
-            # 2. Aplicar el impacto del monto nuevo
-            cuenta.saldo += monto_nuevo
+            # 1. Deshacer el impacto del monto original (HECHO EN MODEL.SAVE())
+            # 2. Aplicar el impacto del monto nuevo (HECHO EN MODEL.SAVE())
             
-            # 3. Guardar los cambios
-            cuenta.save()
-            transaccion_nueva.save() 
+            transaccion_nueva.save() # <-- ESTO DEBE CONTENER LA LÓGICA DE AJUSTE DE SALDO
             
             messages.success(request, "¡Transacción actualizada con éxito!")
             return redirect('mi_finanzas:transacciones_lista') 
@@ -428,16 +440,17 @@ def eliminar_transaccion(request, pk):
         # Se elimina la transacción par automáticamente
         transaccion_par = transaccion.transaccion_relacionada
         
-        # Ajuste de saldo en la cuenta de la transacción actual
+        # Ajuste de saldo en la cuenta de la transacción actual (Reversión)
         cuenta = transaccion.cuenta
-        cuenta.saldo -= transaccion.monto
+        cuenta.saldo -= transaccion.monto # Restar un egreso (-X) es sumar (+X)
         cuenta.save()
-        transaccion.delete()
         
-        # Ajuste de saldo en la cuenta de la transacción par
+        # Ajuste de saldo en la cuenta de la transacción par (Reversión)
         cuenta_par = transaccion_par.cuenta
-        cuenta_par.saldo -= transaccion_par.monto
+        cuenta_par.saldo -= transaccion_par.monto # Restar un ingreso (+Y) es restar (-Y)
         cuenta_par.save()
+        
+        transaccion.delete()
         transaccion_par.delete()
         
         messages.success(request, "¡Transferencia eliminada y saldos ajustados con éxito!")
@@ -448,7 +461,8 @@ def eliminar_transaccion(request, pk):
         cuenta = transaccion.cuenta
         monto = transaccion.monto 
         
-        # Lógica de Reversión: Restamos el impacto (si era un egreso de -50, restar -50 es sumar 50)
+        # Lógica de Reversión para transacciones normales (NO transferencias)
+        # Restamos el impacto (si era un egreso de -50, restar -50 es sumar 50)
         cuenta.saldo -= monto
         
         cuenta.save()
@@ -464,7 +478,7 @@ def eliminar_transaccion(request, pk):
 
 
 # ========================================================
-# VISTAS DE PRESUPUESTOS (CRUD) (No requieren cambios de refinamiento)
+# VISTAS DE PRESUPUESTOS (CRUD)
 # ========================================================
 
 @method_decorator(login_required, name='dispatch')
@@ -549,7 +563,7 @@ def eliminar_presupuesto(request, pk):
 
 
 # ========================================================
-# VISTAS DE REPORTES (UNIFICADA Y CORREGIDA)
+# VISTAS DE REPORTES (UNIFICADA)
 # ========================================================
 
 @login_required
@@ -562,9 +576,9 @@ def reportes_financieros(request):
     # 1. Determinar el rango de los últimos 6 meses completos
     hoy = date.today()
     # 5 meses atrás para obtener el sexto mes
-    fecha_6_meses_atras = hoy - relativedelta(months=5) 
+    fecha_5_meses_atras = hoy - relativedelta(months=5) 
     # 1er día del mes de inicio (e.g., 01 de Mayo)
-    fecha_inicio = fecha_6_meses_atras.replace(day=1) 
+    fecha_inicio = fecha_5_meses_atras.replace(day=1) 
     
     transacciones = Transaccion.objects.filter(
         usuario=request.user, 
@@ -611,8 +625,9 @@ def reportes_financieros(request):
         'gastos_por_categoria_json': gastos_por_categoria_json, # JSON para el script JS
         
         # Datos adicionales
-        'titulo': f"Reporte de Flujo de Caja por Período  ({fecha_inicio.strftime('%b %Y')} a {hoy.strftime('%b %Y')})",
+        'titulo': f"Reporte de Flujo de Caja por Período ({fecha_inicio.strftime('%b %Y')} a {hoy.strftime('%b %Y')})",
         'form': TransferenciaForm(user=request.user), # Para el modal
     }
     
     return render(request, 'mi_finanzas/reportes_financieros.html', context)
+
