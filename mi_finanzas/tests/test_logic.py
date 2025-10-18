@@ -20,8 +20,9 @@ User = get_user_model()
 
 class FinanzasLogicTestCase(TestCase):
     """Pruebas centradas en la lógica de modelos y cálculos."""
-    # 🚨 CRÍTICO: Deshabilitar transacciones para forzar la limpieza completa (mantenemos)
-    transaction = true 
+    # 🚨 CORRECCIÓN: 'true' no es válido. Debe ser 'True' o False. 
+    # Usaremos True para el aislamiento por transacciones (comportamiento por defecto)
+    transaction = True 
 
     def setUp(self):
         # 1. Crear un usuario de prueba
@@ -61,12 +62,9 @@ class FinanzasLogicTestCase(TestCase):
             descripcion='Compra en supermercado inicial'
         )
          
-        # ❌ ELIMINADO: Forzar saldos manualmente. Dejamos que las transacciones lo hagan.
         # El saldo esperado de cuenta_principal es ahora: 1000 + 2000 - 500 = 3500.00
-        
+         
         # 5. Forzar la actualización del saldo de la cuenta basado en las transacciones creadas
-        # Se asume que tu modelo Cuenta tiene una lógica de 'save' o signals que hace esto.
-        # Si no la tiene, debemos recalcular y guardar el saldo esperado:
         self.cuenta_principal.saldo = Decimal('3500.00')
         self.cuenta_principal.save()
 
@@ -85,7 +83,7 @@ class FinanzasLogicTestCase(TestCase):
         saldo_neto = cuentas.aggregate(
             total=Coalesce(Sum('saldo'), Decimal(0), output_field=DecimalField())
         )['total']
-        # 🚨 AJUSTE: El saldo total ahora es 3500 + 5000 - 200 = 8300.00
+        # Saldo total: 3500 + 5000 - 200 = 8300.00
         self.assertEqual(saldo_neto, Decimal('8300.00')) 
 
     def test_transaccion_ajusta_saldo(self):
@@ -95,7 +93,7 @@ class FinanzasLogicTestCase(TestCase):
             tipo='EGRESO', fecha=date.today(), descripcion='Retiro'
         )
         self.cuenta_ahorros.refresh_from_db()
-        # El saldo inicial de ahorros es 5000.00. Esperamos 4900.00
+        # Saldo inicial de ahorros es 5000.00. Esperamos 4900.00
         self.assertEqual(self.cuenta_ahorros.saldo, Decimal('4900.00'))
 
 # --------------------------------------------------------
@@ -152,12 +150,10 @@ class FinanzasLogicTestCase(TestCase):
             gastos_abs=Coalesce(Sum('monto', filter=Q(tipo='EGRESO')), Decimal(0))
         )
          
-        # 🚨 AJUSTE: Ingresos = 2000 (inicial) + 100 = 2100.00
+        # Ingresos = 2000 (inicial) + 100 = 2100.00
         self.assertEqual(totales['ingresos'], Decimal('2100.00')) 
-        # 🚨 AJUSTE: Gastos = 500 (inicial) + 20 = 520.00
+        # Gastos = 500 (inicial) + 20 = 520.00
         self.assertEqual(totales['gastos_abs'], Decimal('520.00'))
-
-        # ❌ ELIMINADO: Lógica de restablecimiento manual (transaction=False lo hace)
 
 
     def test_eliminar_transferencia_revierte_saldos(self):
@@ -171,9 +167,9 @@ class FinanzasLogicTestCase(TestCase):
         # Verificar saldos intermedios
         self.cuenta_principal.refresh_from_db()
         self.cuenta_ahorros.refresh_from_db()
-        # 🚨 AJUSTE: Saldo inicial es 3500.00. Después de -300.00 es 3200.00.
+        # Saldo principal: 3500.00 - 300.00 = 3200.00.
         self.assertEqual(self.cuenta_principal.saldo, Decimal('3200.00'))
-        # 🚨 AJUSTE: Saldo inicial de ahorros es 5000.00. Después de +300.00 es 5300.00.
+        # Saldo ahorros: 5000.00 + 300.00 = 5300.00.
         self.assertEqual(self.cuenta_ahorros.saldo, Decimal('5300.00'))
          
         # 2. Revertir saldos manualmente (Aislamiento de la lógica de borrado)
@@ -194,7 +190,7 @@ class FinanzasLogicTestCase(TestCase):
         self.cuenta_principal.refresh_from_db()
         self.cuenta_ahorros.refresh_from_db()
          
-        # 🚨 AJUSTE: El saldo inicial (después del setUp) es 3500.00
+        # El saldo inicial (después del setUp) es 3500.00 y 5000.00
         self.assertEqual(self.cuenta_principal.saldo, Decimal('3500.00')) 
         self.assertEqual(self.cuenta_ahorros.saldo, Decimal('5000.00')) 
          
@@ -208,8 +204,8 @@ class FinanzasLogicTestCase(TestCase):
 
 class VistasIntegracionTestCase(LiveServerTestCase):
     """Pruebas funcionales de las vistas críticas."""
-    # 🚨 CRÍTICO: Deshabilitar transacciones para forzar la limpieza completa (mantenemos)
-    transaction = true 
+    # 🚨 CORRECCIÓN: 'true' no es válido. Debe ser 'True' o False. Usaremos True.
+    transaction = True 
 
     def setUp(self):
         self.client = Client()
@@ -232,17 +228,15 @@ class VistasIntegracionTestCase(LiveServerTestCase):
             usuario=self.user, cuenta=self.cuenta2, monto=Decimal('50.00'), tipo='EGRESO',
             categoria=self.cat_gasto, fecha=date.today(), descripcion='Transaccion de prueba para eliminar'
         )
-        
+         
         # 5. Forzar el saldo correcto después de la transacción inicial
         self.cuenta2.saldo = Decimal('950.00') # 1000.00 - 50.00 = 950.00
         self.cuenta2.save()
-        
-        # ❌ ELIMINADO: Forzar saldos manualmente.
-        
+         
         self.cuenta1.refresh_from_db() 
         self.cuenta2.refresh_from_db() 
 
-        # Usar la PK de la transacción creada, en lugar de get(), ya que es único.
+        # Usar la PK de la transacción creada.
         self.tx_simple_crud = Transaccion.objects.get(pk=tx_inicial.pk)
         self.url_eliminar_transaccion = reverse('mi_finanzas:eliminar_transaccion', args=[self.tx_simple_crud.pk])
 
@@ -323,6 +317,6 @@ class VistasIntegracionTestCase(LiveServerTestCase):
          
         # Gastos: 300 + 150 = 450.00 (El ingreso de 50.00 y la transferencia de 200.00 no cuentan)
         self.assertEqual(gasto_acumulado, Decimal('450.00'))
-        
-        # ❌ ELIMINADO: Lógica de restablecimiento manual (transaction=False lo hace)
+         
+        # ❌ ELIMINADO: Lógica de restablecimiento manual (transaction=True lo hace)
 
