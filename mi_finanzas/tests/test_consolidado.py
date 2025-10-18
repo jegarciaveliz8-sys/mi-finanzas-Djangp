@@ -37,7 +37,7 @@ class FinanzasLogicTestCase(TestCase):
             usuario=self.user, nombre='Tarjeta Visa', tipo='TARJETA', saldo=Decimal('-200.00')
         )
         
-        # 3. Crear categorías de setup (opcional, pero buena práctica si se usan en otros tests)
+        # 3. Crear categorías de setup 
         self.categoria_comida = Categoria.objects.create(
             usuario=self.user, nombre='Comida', tipo='GASTO'
         )
@@ -51,12 +51,10 @@ class FinanzasLogicTestCase(TestCase):
     
     def test_saldo_total_neto(self):
         """Prueba que el saldo neto de todas las cuentas es el esperado."""
-        # Código de prueba aquí...
         pass 
     
     def test_transaccion_actualiza_saldo(self):
         """Verifica que la creación de una transacción actualice la cuenta."""
-        # Código de prueba aquí...
         pass
     
     def test_transferencia_correcta_actualiza_ambos_saldos(self):
@@ -66,12 +64,12 @@ class FinanzasLogicTestCase(TestCase):
         saldo_inicial_principal = self.cuenta_principal.saldo
         saldo_inicial_ahorros = self.cuenta_ahorros.saldo
 
-        # ✅ Corrección 1: Se añade el campo 'fecha'
+        # ✅ Corrección de Fallo: Aseguramos que la cuenta principal SEA UN GASTO.
         Transaccion.objects.create(
             usuario=self.user, 
             cuenta=self.cuenta_principal, 
             monto=monto_transferido, 
-            tipo='GASTO', 
+            tipo='GASTO', # <-- GASTO para restar
             descripcion='Transferencia Out',
             fecha=date.today() 
         )
@@ -90,7 +88,6 @@ class FinanzasLogicTestCase(TestCase):
         self.assertEqual(self.cuenta_principal.saldo, saldo_inicial_principal - monto_transferido)
         self.assertEqual(self.cuenta_ahorros.saldo, saldo_inicial_ahorros + monto_transferido)
     
-    # ... (Otros tests de lógica) ...
 
 
 # ----------------------------------------------------
@@ -113,7 +110,7 @@ class PanelDeControlTest(TestCase):
         self.cuenta1 = Cuenta.objects.create(usuario=self.user, nombre='Caja', tipo='EFECTIVO', saldo=Decimal('500.00'))
         self.cuenta2 = Cuenta.objects.create(usuario=self.user, nombre='Banco', tipo='CHEQUES', saldo=Decimal('1000.00'))
         
-        # ✅ Corrección 3A: Crear una categoría para que el formulario POST sea válido
+        # ✅ Creamos una categoría para el POST (para evitar AssertionError 0!=1)
         self.categoria_gasto = Categoria.objects.create(
             usuario=self.user,
             nombre='Alimentos',
@@ -126,29 +123,27 @@ class PanelDeControlTest(TestCase):
     
     def test_panel_de_control_calculates_correct_summary(self):
         """Verifica los cálculos de ingresos/gastos y el saldo en el contexto de la vista."""
-        # Código de prueba aquí...
         pass 
 
     def test_carga_correcta_y_contenido_basico(self):
         """Prueba que la vista devuelve status 200 y tiene contenido básico."""
         response = self.client.get(self.url_resumen)
         self.assertEqual(response.status_code, 200)
-        # Código de prueba aquí...
         pass
     
     def test_anadir_transaccion_con_post(self):
         """Verifica que la vista POST cree una nueva transacción y redirija."""
         
-        # ✅ Corrección 2: Se usa 'anadir_transaccion'
+        # ✅ CORRECCIÓN DE ERROR: Definición de url_crear (soluciona NameError)
         url_crear = reverse('mi_finanzas:anadir_transaccion') 
         
-        # ✅ Corrección 3B: Se añade la clave primaria de 'categoria'
+        # ✅ Corrección de Formato: Monto como string y fecha con isoformat
         datos_formulario = {
-            'monto': 75.50,
+            'monto': str(Decimal('75.50')), # Decimal a string
             'tipo': 'GASTO',
             'cuenta': self.cuenta1.pk, 
             'descripcion': 'Cena de prueba',
-            'fecha': date.today().strftime('%Y-%m-%d'),
+            'fecha': date.today().isoformat(), # Formato estándar YYYY-MM-DD
             'categoria': self.categoria_gasto.pk 
         }
         
@@ -157,9 +152,14 @@ class PanelDeControlTest(TestCase):
         # Simular la petición POST
         response = self.client.post(url_crear, datos_formulario, follow=True)
 
-        # Aserciones: Verificar el resultado (esto ya no debe fallar)
+        # 🛑 LÍNEAS DE DEBUGGING CRÍTICAS (PARA IDENTIFICAR EL CAMPO FALTANTE)
+        if response.context and 'form' in response.context and response.context['form'].errors:
+            print("\n--- ¡DEBUGGING! ERRORES DEL FORMULARIO ---")
+            print(response.context['form'].errors)
+            print("------------------------------------------\n")
+        # 🛑 FIN LÍNEAS DE DEBUGGING
+
+        # Aserciones: Verificar el resultado
         self.assertEqual(Transaccion.objects.count(), conteo_inicial + 1, "No se creó la nueva transacción.")
         self.assertEqual(response.status_code, 200)
-
-    # ... (Otros tests de vistas) ...
 
