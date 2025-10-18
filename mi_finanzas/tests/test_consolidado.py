@@ -93,3 +93,55 @@ class PanelDeControlTest(TestCase): # Usamos TestCase para la mayoría de las in
     
     # ... (Añade todos los demás métodos test_ de vistas que tenías) ...
 
+
+
+ def test_transferencia_correcta_actualiza_ambos_saldos(self):
+        """Verifica que una transferencia disminuya la cuenta de origen y aumente la de destino."""
+        monto_transferido = Decimal('100.00')
+        
+        # Guardar saldos iniciales antes de la acción
+        saldo_inicial_principal = self.cuenta_principal.saldo
+        saldo_inicial_ahorros = self.cuenta_ahorros.saldo
+
+        # Realizar la acción (asumiendo que tienes un método/función de transferencia)
+        # Aquí se simula la creación de dos transacciones o la llamada a una función
+        Transaccion.objects.create(
+            usuario=self.user, cuenta=self.cuenta_principal, monto=monto_transferido, tipo='GASTO', descripcion='Transferencia Out'
+        )
+        Transaccion.objects.create(
+            usuario=self.user, cuenta=self.cuenta_ahorros, monto=monto_transferido, tipo='INGRESO', descripcion='Transferencia In'
+        )
+        
+        # Refrescar los datos de la base de datos
+        self.cuenta_principal.refresh_from_db()
+        self.cuenta_ahorros.refresh_from_db()
+
+        # Aserciones: Verificar el resultado
+        self.assertEqual(self.cuenta_principal.saldo, saldo_inicial_principal - monto_transferido)
+        self.assertEqual(self.cuenta_ahorros.saldo, saldo_inicial_ahorros + monto_transferido)
+
+
+
+    def test_anadir_transaccion_con_post(self):
+        """Verifica que la vista POST cree una nueva transacción y redirija."""
+        
+        url_crear = reverse('mi_finanzas:crear_transaccion') # Asumiendo esta URL existe
+        
+        datos_formulario = {
+            'monto': 75.50,
+            'tipo': 'GASTO',
+            'cuenta': self.cuenta1.pk, # Usar la clave primaria de la cuenta
+            'descripcion': 'Cena de prueba',
+            'fecha': date.today().strftime('%Y-%m-%d')
+        }
+        
+        # Contar transacciones antes del POST
+        conteo_inicial = Transaccion.objects.count()
+
+        # Simular la petición POST
+        response = self.client.post(url_crear, datos_formulario, follow=True)
+
+        # Aserciones: Verificar el resultado
+        self.assertEqual(Transaccion.objects.count(), conteo_inicial + 1, "No se creó la nueva transacción.")
+        self.assertEqual(response.status_code, 200) # O 302 si no usas follow=True
+
