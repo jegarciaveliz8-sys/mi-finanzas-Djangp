@@ -1,156 +1,64 @@
-# mi_finanzas/tests/test_consolidado.py
+# mi_finanzas/urls.py (CONTENIDO CORRECTO)
 
-# --- IMPORTACIONES NECESARIAS ---
-from django.test import TestCase, Client, LiveServerTestCase
-from django.urls import reverse
-from django.contrib.auth import get_user_model
-from decimal import Decimal
-from datetime import date, timedelta # Necesitamos 'date' para la corrección de fecha
+from django.urls import path
+from . import views
+from django.views.generic import TemplateView
 
-# Importaciones de modelos (CRÍTICAS para resolver NameError)
-from mi_finanzas.models import Cuenta, Transaccion, Categoria, Presupuesto 
+# Define el namespace de la aplicación.
+app_name = 'mi_finanzas' 
 
-User = get_user_model()
-
-# ========================================================
-# 1. PRUEBAS DE MODELOS Y LÓGICA DE NEGOCIO CRÍTICA
-# ========================================================
-
-class FinanzasLogicTestCase(TestCase):
-    """Pruebas centradas en la lógica de modelos y cálculos."""
-
-    def setUp(self):
-        # 1. Crear un usuario de prueba
-        self.user = User.objects.create_user(
-            username='testuser', 
-            password='testpassword'
-        )
-
-        # 2. Crear cuentas (CORRECCIÓN: usando 'saldo' en lugar de 'balance')
-        self.cuenta_principal = Cuenta.objects.create(
-            usuario=self.user, nombre='Principal', tipo='CHEQUES', saldo=Decimal('1000.00')
-        )
-        self.cuenta_ahorros = Cuenta.objects.create(
-            usuario=self.user, nombre='Ahorros', tipo='AHORROS', saldo=Decimal('5000.00')
-        )
-        self.tarjeta_credito = Cuenta.objects.create(
-            usuario=self.user, nombre='Tarjeta Visa', tipo='TARJETA', saldo=Decimal('-200.00')
-        )
-
-        # 3. Crear categorías y transacciones de setup...
-        # ... (Asegúrate de que este setup esté completo) ...
-        
-        self.cuenta_principal.refresh_from_db() 
-
-    # MÉTODOS DE PRUEBA DE LÓGICA
+# LISTA ÚNICA Y COMPLETA DE URLS
+urlpatterns = [
     
-    def test_saldo_total_neto(self):
-        """Prueba que el saldo neto de todas las cuentas es el esperado."""
-        # ... Tu código de aserción (assert) aquí ...
-        pass 
+    # =========================================================
+    # 1. Rutas de Autenticación
+    # =========================================================
+    path('registro/', views.RegistroUsuario.as_view(), name='registro'), 
     
-    def test_transaccion_actualiza_saldo(self):
-        """Verifica que la creación de una transacción actualice la cuenta."""
-        # ... Tu código de prueba aquí ...
-        pass
+    # =========================================================
+    # 2. Rutas de Vistas Principales (Dashboard y Listados)
+    # =========================================================
+    # Vista principal, la raíz de la app (ej: /mi_finanzas/)
+    path('', views.resumen_financiero, name='resumen_financiero'),
     
-    def test_transferencia_correcta_actualiza_ambos_saldos(self):
-        """Verifica que una transferencia disminuya la cuenta de origen y aumente la de destino."""
-        monto_transferido = Decimal('100.00')
-        
-        # Guardar saldos iniciales antes de la acción
-        saldo_inicial_principal = self.cuenta_principal.saldo
-        saldo_inicial_ahorros = self.cuenta_ahorros.saldo
-
-        # Realizar la acción (simulación de transferencia)
-        # CORRECCIÓN: Se añade el campo 'fecha'
-        Transaccion.objects.create(
-            usuario=self.user, 
-            cuenta=self.cuenta_principal, 
-            monto=monto_transferido, 
-            tipo='GASTO', 
-            descripcion='Transferencia Out',
-            fecha=date.today() # <--- SOLUCIÓN DEL IntegrityError
-        )
-        Transaccion.objects.create(
-            usuario=self.user, 
-            cuenta=self.cuenta_ahorros, 
-            monto=monto_transferido, 
-            tipo='INGRESO', 
-            descripcion='Transferencia In',
-            fecha=date.today() # <--- SOLUCIÓN DEL IntegrityError
-        )
-        
-        # Refrescar los datos de la base de datos
-        self.cuenta_principal.refresh_from_db()
-        self.cuenta_ahorros.refresh_from_db()
-
-        # Aserciones: Verificar el resultado
-        self.assertEqual(self.cuenta_principal.saldo, saldo_inicial_principal - monto_transferido)
-        self.assertEqual(self.cuenta_ahorros.saldo, saldo_inicial_ahorros + monto_transferido)
+    # Vista de Cuentas (CLASE)
+    path('cuentas/', views.CuentasListView.as_view(), name='cuentas_lista'),
     
-    # ... (Añade todos los demás métodos test_ de lógica que tenías) ...
-
-
-# ----------------------------------------------------
-
-# ========================================================
-# 2. PRUEBAS DE VISTAS Y FUNCIONALIDAD (Integración)
-# ========================================================
-
-class PanelDeControlTest(TestCase):
-    """Pruebas funcionales de las vistas críticas, enfocadas en el Panel de Control."""
+    # Vista de Historial de Transacciones (CLASE)
+    path('transacciones/lista/', views.TransaccionesListView.as_view(), name='transacciones_lista'), 
     
-    def setUp(self):
-        self.client = Client()
-        self.user = User.objects.create_user(
-            username='viewuser', password='viewpassword'
-        )
-        self.client.login(username='viewuser', password='viewpassword')
-        
-        # Cuentas necesarias (CORRECCIÓN: usando 'saldo' en lugar de 'balance')
-        self.cuenta1 = Cuenta.objects.create(usuario=self.user, nombre='Caja', tipo='EFECTIVO', saldo=Decimal('500.00'))
-        self.cuenta2 = Cuenta.objects.create(usuario=self.user, nombre='Banco', tipo='CHEQUES', saldo=Decimal('1000.00'))
-        
-        self.url_resumen = reverse('mi_finanzas:resumen_financiero')
-        
-    # MÉTODOS DE PRUEBA DE VISTAS
+    # RUTA DEL MANUAL 
+    path('manual/', TemplateView.as_view(template_name='manual_html/index.html'), name='manual_page'),
     
-    def test_panel_de_control_calculates_correct_summary(self):
-        """Verifica los cálculos de ingresos/gastos y el saldo en el contexto de la vista."""
-        # ... Tu código de aserción (assert) aquí ...
-        pass 
+    # =========================================================
+    # 3. CRUD de Cuentas
+    # =========================================================
+    path('anadir_cuenta/', views.anadir_cuenta, name='anadir_cuenta'),
+    path('cuentas/<int:pk>/editar/', views.editar_cuenta, name='editar_cuenta'),    
+    path('cuentas/<int:pk>/eliminar/', views.eliminar_cuenta, name='eliminar_cuenta'), 
 
-    def test_carga_correcta_y_contenido_basico(self):
-        """Prueba que la vista devuelve status 200 y tiene contenido básico."""
-        response = self.client.get(self.url_resumen)
-        self.assertEqual(response.status_code, 200)
-        # ... Tu código de aserción de contenido aquí ...
-        pass
+    # =========================================================
+    # 4. CRUD de Transacciones y Operaciones
+    # =========================================================
+    path('anadir_transaccion/', views.anadir_transaccion, name='anadir_transaccion'),
+    path('transacciones/<int:pk>/editar/', views.editar_transaccion, name='editar_transaccion'),
+    path('transacciones/<int:pk>/eliminar/', views.eliminar_transaccion, name='eliminar_transaccion'),
     
-    def test_anadir_transaccion_con_post(self):
-        """Verifica que la vista POST cree una nueva transacción y redirija."""
-        
-        # CORRECCIÓN: Se usa 'anadir_transaccion' en lugar de 'crear_transaccion'
-        url_crear = reverse('mi_finanzas:anadir_transaccion') 
-        
-        datos_formulario = {
-            'monto': 75.50,
-            'tipo': 'GASTO',
-            'cuenta': self.cuenta1.pk, 
-            'descripcion': 'Cena de prueba',
-            'fecha': date.today().strftime('%Y-%m-%d') # Necesario para la validación del modelo/formulario
-        }
-        
-        # Contar transacciones antes del POST
-        conteo_inicial = Transaccion.objects.count()
+    # RUTA DE TRANSFERENCIA
+    path('transferir/', views.transferir_monto, name='transferir_monto'), 
 
-        # Simular la petición POST
-        response = self.client.post(url_crear, datos_formulario, follow=True)
+    # =========================================================
+    # 5. CRUD de Presupuestos
+    # =========================================================
+    path('presupuestos/', views.PresupuestosListView.as_view(), name='lista_presupuestos'), 
+    path('crear_presupuesto/', views.crear_presupuesto, name='crear_presupuesto'),
+    path('presupuesto/<int:pk>/eliminar/', views.eliminar_presupuesto, name='eliminar_presupuesto'),
+    
+    # RUTA DE EDICIÓN DEL PRESUPUESTO
+    path('presupuesto/<int:pk>/editar/', views.editar_presupuesto, name='editar_presupuesto'),
 
-        # Aserciones: Verificar el resultado
-        self.assertEqual(Transaccion.objects.count(), conteo_inicial + 1, "No se creó la nueva transacción.")
-        self.assertEqual(response.status_code, 200)
-
-    # ... (Añade todos los demás métodos test_ de vistas que tenías) ...
-
+    # =========================================================
+    # 6. Reportes
+    # =========================================================
+    path('reportes/', views.reportes_financieros, name='reportes_financieros'),
+]
