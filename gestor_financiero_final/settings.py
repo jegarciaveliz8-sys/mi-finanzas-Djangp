@@ -24,7 +24,11 @@ DEBUG = True
 # ⚠️ ALLOWED_HOSTS: ¡CRÍTICO PARA DESPLIEGUE GRATUITO!
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.onrender.com', '.railway.app', '*'] 
 
-# ⭐ NOTA: El bloque INTERNAL_IPS se ha ELIMINADO ya que debug_toolbar está fuera.
+# ⭐ CORRECCIÓN: BLOQUE NECESARIO PARA DJANGO DEBUG TOOLBAR
+INTERNAL_IPS = [
+    "127.0.0.1",
+    "::1",
+]
 
 
 # ----------------------------------------------------------------------
@@ -39,6 +43,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     
+    # CRÍTICO: ¡AÑADIR debug_toolbar AQUÍ!
+    'debug_toolbar',
+
     # AÑADIR WhiteNoise para servir estáticos sin CDN
     'whitenoise.runserver_nostatic',
     'django.contrib.staticfiles',
@@ -62,6 +69,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    
+    # CRÍTICO: ¡AÑADIR debug_toolbar MIDDLEWARE! Debe ir después de SecurityMiddleware.
+    'debug_toolbar.middleware.DebugToolbarMiddleware',
+    
     'whitenoise.middleware.WhiteNoiseMiddleware', # CRÍTICO: Para servir estáticos
 
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -140,4 +151,3 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Necesarias para crispy_forms
 CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
 CRISPY_TEMPLATE_PACK = "bootstrap5"
-
