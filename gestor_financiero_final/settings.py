@@ -4,7 +4,7 @@ CONFIGURACIÓN CORREGIDA PARA DESPLIEGUE GRATUITO EN NUBE (Render/Railway).
 """
 
 from pathlib import Path
-import os  # <<-- IMPORTACIÓN DE OS NECESARIA
+import os
 from django.utils.translation import gettext_lazy as _
 
 # Construye paths dentro del proyecto: BASE_DIR / 'subdir'.
@@ -19,16 +19,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-33^d*8(2f!7&y(f8k5g*s!0f2j00+c2w2m1f8$20e=g0k0a0p'
 
 # ⚠️ DEBUG: Cambiar a False ANTES DE DEPLOYAR para evitar exponer errores.
-DEBUG = True # Mantenemos TRUE por ahora, pero CÁMBIALO a FALSE antes del push final
+DEBUG = True
 
 # ⚠️ ALLOWED_HOSTS: ¡CRÍTICO PARA DESPLIEGUE GRATUITO!
 ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '.onrender.com', '.railway.app', '*'] 
-# El '*' es un comodín para desarrollo/demos, pero se debe usar el subdominio real.
 
-# 💡 CONFIGURACIÓN PARA DJANGO DEBUG TOOLBAR (ELIMINADO en Producción)
-INTERNAL_IPS = [
-        "127.0.0.1", 
-]
+# ⭐ NOTA: El bloque INTERNAL_IPS se ha ELIMINADO ya que debug_toolbar está fuera.
 
 
 # ----------------------------------------------------------------------
@@ -36,28 +32,27 @@ INTERNAL_IPS = [
 # ----------------------------------------------------------------------
 
 INSTALLED_APPS = [
-        # Aplicaciones Core de Django
-        'django.contrib.admin',
-        'django.contrib.auth',
-        'django.contrib.contenttypes',
-        'django.contrib.sessions',
-        'django.contrib.messages',
-        
-        # AÑADIR WhiteNoise si lo necesitas para servir estáticos sin CDN
-        'whitenoise.runserver_nostatic', # <<-- NUEVO: para que funcione con el runserver local
-        'django.contrib.staticfiles',
+    # Aplicaciones Core de Django
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    
+    # AÑADIR WhiteNoise para servir estáticos sin CDN
+    'whitenoise.runserver_nostatic',
+    'django.contrib.staticfiles',
 
-        # 💡 HERRAMIENTAS DE DEPURACIÓN Y ESTILO
-        # 'debug_toolbar', # <<-- ELIMINADO para producción
-        'django.contrib.humanize',
+    # 💡 HERRAMIENTAS DE ESTILO
+    'django.contrib.humanize',
 
-        # ✅ LIBRERÍAS DE FORMULARIOS
-        'crispy_forms', 
-        'widget_tweaks', 
-        'crispy_bootstrap5',
+    # ✅ LIBRERÍAS DE FORMULARIOS
+    'crispy_forms', 
+    'widget_tweaks', 
+    'crispy_bootstrap5',
 
-        # Mis aplicaciones locales
-        'mi_finanzas', 
+    # Mis aplicaciones locales
+    'mi_finanzas', 
 ]
 
 
@@ -66,24 +61,57 @@ INSTALLED_APPS = [
 # ----------------------------------------------------------------------
 
 MIDDLEWARE = [
-        'django.middleware.security.SecurityMiddleware',
-        'whitenoise.middleware.WhiteNoiseMiddleware', # <<-- CRÍTICO: Para servir estáticos
+    'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware', # CRÍTICO: Para servir estáticos
 
-        # 'debug_toolbar.middleware.DebugToolbarMiddleware', # <<-- ELIMINADO
-
-        'django.contrib.sessions.middleware.SessionMiddleware',
-        'django.middleware.common.CommonMiddleware',
-        'django.middleware.csrf.CsrfViewMiddleware',
-        'django.contrib.auth.middleware.AuthenticationMiddleware',
-        'django.contrib.messages.middleware.MessageMiddleware',
-        'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 
 ROOT_URLCONF = 'gestor_financiero_final.urls'
 
 
-# ... (Resto de las secciones TEMPLATES, WSGI, DATABASES, AUTENTICACIÓN sin cambios) ...
+# ----------------------------------------------------------------------
+# PLANTILLAS (TEMPLATES)
+# ----------------------------------------------------------------------
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        # DIRS: El directorio 'templates' global del proyecto.
+        'DIRS': [BASE_DIR / 'templates'], 
+        # APP_DIRS: CRÍTICO. Permite a Django buscar templates en el subdirectorio 
+        # 'templates' de cada aplicación (incluyendo el admin).
+        'APP_DIRS': True, 
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.debug',
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+            ],
+        },
+    },
+]
+
+
+# ----------------------------------------------------------------------
+# BASE DE DATOS <--- ✅ CORRECCIÓN AGREGADA
+# ----------------------------------------------------------------------
+
+DATABASES = {
+    'default': {
+        # Configuración por defecto usando SQLite para tests y desarrollo local
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
 
 # ----------------------------------------------------------------------
 # ARCHIVOS ESTÁTICOS Y MEDIA (CORREGIDO para PRODUCCIÓN)
@@ -105,4 +133,11 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ... (Resto del archivo sin cambios) ...
+# ----------------------------------------------------------------------
+# CONFIGURACIONES ADICIONALES
+# ----------------------------------------------------------------------
+
+# Necesarias para crispy_forms
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = "bootstrap5"
+
